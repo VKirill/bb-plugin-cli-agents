@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Add Codex Profile picker for file-based profiles (Codex 0.134+).
+- Apply developer_instructions through BB with explicit 4096-character limit.
+- Keep BB model and permission controls; reject configuration-only and oversized profiles instead of silently ignoring instructions.
+- Document that native app-server does not accept --profile and full profile configuration is not applied.
+
 ## 0.1.0
 
 - Native session-agent picker for Claude Code and stock OpenCode ACP.

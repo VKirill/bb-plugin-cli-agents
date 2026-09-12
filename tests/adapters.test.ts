@@ -129,7 +129,7 @@ describe("composer routing", () => {
       })?.hostId,
     ).toBe("host_a");
   });
-  it("does not invent support for Codex or unresolved new worktrees", () => {
+  it("rejects missing machines and unresolved new worktrees", () => {
     expect(
       readTarget(
         "p",

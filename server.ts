@@ -23,7 +23,16 @@ export function tokensFrom(value: unknown): string[] {
     ),
   ];
 }
-export default function plugin(bb: BbPluginApi) {
+export default async function plugin(bb: BbPluginApi) {
+  const profileInstructions = new Map<string, string>();
+  for (const key of await bb.storage.kv.list("instructions:")) {
+    const text = await bb.storage.kv.get<string>(key);
+    if (typeof text === "string" && text.length <= 4096)
+      profileInstructions.set(key.slice(13), text);
+  }
+  bb.agents.contributeInstructions(
+    ({ threadId }) => profileInstructions.get(threadId) ?? null,
+  );
   const host = bb.hosts.experimental_client({ contract: hostContract });
   async function resolveTarget(target: Target) {
     const machine = await bb.sdk.hosts.get({ hostId: target.hostId });
@@ -105,7 +114,7 @@ export default function plugin(bb: BbPluginApi) {
       if (!s)
         throw new Error("Agent selection is missing. Choose the agent again.");
       return {
-        context: `${marker(token)}\nNative session agent selected: ${s.agentId}. CLI Agents applies this identity at process startup.`,
+        context: s.providerId === "codex" ? `${marker(token)}\nCodex instruction profile selected: ${s.agentId}. CLI Agents contributes its developer instructions through BB; other profile settings are not applied.` : `${marker(token)}\nNative session agent selected: ${s.agentId}. CLI Agents applies this identity at process startup.`,
       };
     },
   });
@@ -150,6 +159,15 @@ export default function plugin(bb: BbPluginApi) {
         },
         { hostId: selected.hostId },
       );
+      if (selected.providerId === "codex") {
+        const instructions = await host.call(
+          "instructions",
+          { agentId: selected.agentId },
+          { hostId: selected.hostId },
+        );
+        await bb.storage.kv.set(`instructions:${ctx.thread.id}`, instructions);
+        profileInstructions.set(ctx.thread.id, instructions);
+      }
       await bb.storage.kv.set(`thread:${ctx.thread.id}`, selected);
       await bb.storage.kv.set(`env:${ctx.thread.id}`, prepared);
       return { action: "proceed" };

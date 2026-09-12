@@ -143,7 +143,9 @@ function AgentPicker() {
           className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           disabled={view.run.isSubmitting}
         >
-          <span className="truncate">{selected || "Agent"}</span>
+          <span className="truncate">
+            {selected || (target?.providerId === "codex" ? "Profile" : "Agent")}
+          </span>
           <Icon name="ChevronDown" className="size-4 shrink-0" />
         </button>
       </Popover.Trigger>
@@ -154,7 +156,11 @@ function AgentPicker() {
           className="z-50 w-80 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between px-1">
-            <span className="text-sm font-medium">Session agent</span>
+            <span className="text-sm font-medium">
+              {target?.providerId === "codex"
+                ? "Codex profile"
+                : "Session agent"}
+            </span>
             <button
               type="button"
               className="text-xs text-muted-foreground hover:text-foreground"
@@ -171,6 +177,12 @@ function AgentPicker() {
             onChange={(e) => setQuery(e.target.value)}
             className="mb-2 h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
           />
+          {target?.providerId === "codex" && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              Instructions only (up to 4096 characters). Model, permissions and
+              other profile settings are not applied.
+            </p>
+          )}
           {error && (
             <p role="alert" className="mb-2 text-sm text-destructive">
               {error}

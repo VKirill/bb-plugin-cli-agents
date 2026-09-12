@@ -1,3 +1,4 @@
+import { codexProfiles } from "./codex";
 import { readFile, stat, readdir, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import {
@@ -251,6 +252,20 @@ export async function discover(
       supported: false,
     };
   if (provider === "claude-code") return claudeCatalog(cwd, signal);
+  if (provider === "codex") {
+    const version = (
+      await run(await executable("codex"), ["--version"], cwd, signal)
+    ).trim();
+    const match = /codex-cli (\d+)\.(\d+)/.exec(version);
+    if (!match || (Number(match[1]) === 0 && Number(match[2]) < 134))
+      return {
+        agents: [],
+        version,
+        warnings: ["Codex 0.134.0+ is required for file profiles."],
+        supported: false,
+      };
+    return { ...(await codexProfiles()), version, supported: true };
+  }
   const cli = await executable("opencode");
   const version = (await run(cli, ["--version"], cwd, signal)).trim();
   const agents = parseOpenCodeAgents(

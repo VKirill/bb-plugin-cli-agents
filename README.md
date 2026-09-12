@@ -1,15 +1,16 @@
 # CLI Agents for BB
 
-Choose a native session agent from the New thread composer, on the machine and in the project you selected. The CLI loads the agent's instructions and configuration itself. A choice belongs to one chat, not to every chat in the project.
+Choose a native session agent from the New thread composer, on the machine and in the project you selected. Claude Code and OpenCode load native agents themselves. Codex profiles supply additional instructions through BB. A choice belongs to one chat, not to every chat in the project.
 
 ## Supported providers
 
 | BB provider | Discovery | Session selection |
 | --- | --- | --- |
 | Claude Code (`claude-code`) | User/project agent Markdown files and enabled installed Claude plugins | Native `--agent` argument |
+| Codex (`codex`) | `$CODEX_HOME/NAME.config.toml` profiles (Codex 0.134+) | `developer_instructions` through BB, up to 4096 characters |
 | OpenCode (`acp-opencode`) | `opencode agent list`, primary/all agents | Native `default_agent` in the ACP process configuration |
 
-OpenCode's internal compaction, summary and title agents and subagent-only roles are excluded. Other BB providers, including Codex, are not currently supported. A Codex profile or a skill is not advertised as an equivalent native session agent.
+OpenCode's internal compaction, summary and title agents and subagent-only roles are excluded. Other BB providers are not currently supported. Codex support applies profile instructions only: model, permission, hooks, MCP and other profile configuration are not applied. Profiles without developer_instructions or over the 4096-character BB limit cannot be selected.
 
 Requires **BB 0.43.x / Plugin SDK 0.4.84+**, macOS or Linux, and a supported CLI installed and authenticated on the execution machine. The first release supports project checkouts and existing environments. Choose/create a worktree before using the picker; creating a new worktree and choosing its agent in one submission is not supported. Compact/mobile composers currently do not render BB's plugin action slot.
 
@@ -25,14 +26,24 @@ For development: `bb plugin dev`. Release artifacts in `dist/` contain server, f
 
 ## Use
 
-1. Choose a project, existing environment/machine, and Claude Code or OpenCode in BB.
-2. Open **Agent** in the composer action row and search the available agents.
+1. Choose a project, existing environment/machine, and Claude Code, Codex or OpenCode in BB.
+2. Open **Agent** (or **Profile** for Codex) in the composer action row and search the available agents.
 3. Choose one. BB inserts an **Agent: …** mention into the first message; it carries the selection through the native submission pipeline.
 4. Send your request normally. The agent identity stays with this chat, including subsequent turns and plugin reloads.
 
 Before sending, select another agent to replace the mention or choose **Use default agent**. If you switch the machine, project, CLI or workspace after choosing an agent, select again. An incompatible selection is rejected before dispatch rather than silently starting the default agent. Existing conversations cannot change role through the picker.
 
-The search reads agent metadata; it does not copy full instruction bodies into BB prompts. Claude plugin names retain their namespace, for example `lane-stack:dev-orchestrator`. Changes to agent instructions in an existing session follow the CLI's own persistence rules; start a new chat to guarantee fresh instructions.
+The search reads agent metadata without exposing full instruction bodies. Codex profile developer instructions are transferred to BB and stored per thread for reload persistence; Claude and OpenCode instruction bodies remain managed by their CLIs. Claude plugin names retain their namespace, for example `lane-stack:dev-orchestrator`. Changes to agent instructions in an existing session follow the CLI's own persistence rules; start a new chat to guarantee fresh instructions.
+
+## Codex profiles
+
+Create `~/.codex/reviewer.config.toml` (or in `CODEX_HOME`):
+
+```toml
+developer_instructions = "Review changes for bugs and regressions. Explain concrete findings."
+```
+
+Codex app-server rejects `--profile`, and BB 0.43 does not expose per-thread app-server launch overrides. This adapter uses BB’s public instruction contribution API; it does not claim to activate the complete native configuration profile. Instructions remain scoped to the selected conversation. Start a new chat after editing a profile to load fresh instructions.
 
 ## CLI
 

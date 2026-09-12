@@ -1,6 +1,6 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-export const providerSchema = z.enum(["claude-code", "acp-opencode"]);
+export const providerSchema = z.enum(["claude-code", "acp-opencode", "codex"]);
 export const agentSchema = z.object({
   id: z.string().min(1).max(200),
   description: z.string().max(1200),
@@ -37,6 +37,10 @@ export const hostContract = defineRpcContract({
   discover: {
     input: z.object({ cwd: z.string(), providerId: providerSchema }),
     output: catalogSchema,
+  },
+  instructions: {
+    input: z.object({ agentId: z.string() }),
+    output: z.string().max(4096),
   },
   prepare: {
     input: z.object({

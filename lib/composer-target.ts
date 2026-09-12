@@ -14,7 +14,11 @@ export function readTarget(
     session.getItem(key) ?? local.getItem(key) ?? "";
   const providerId =
     read("bb.promptbox.provider") || defaults?.providerId || "";
-  if (providerId !== "claude-code" && providerId !== "acp-opencode")
+  if (
+    providerId !== "claude-code" &&
+    providerId !== "acp-opencode" &&
+    providerId !== "codex"
+  )
     return null;
   const suffix = `-${encodeURIComponent(projectId)}-1`;
   const hostId =

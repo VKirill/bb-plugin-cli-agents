@@ -61,6 +61,7 @@ async function setup() {
           supported: true,
         };
       if (!available) throw new Error("Agent removed");
+      if (method === "instructions") return "Profile instruction";
       return [
         {
           name: "BB_CLAUDE_CODE_EXECUTABLE",
@@ -70,7 +71,7 @@ async function setup() {
       ];
     },
   });
-  plugin(fake.bb);
+  await plugin(fake.bb);
   cleanup.push(() => fake.harness.lifecycle.dispose());
   return {
     ...fake,
@@ -162,4 +163,46 @@ it("fails before dispatch if an agent disappears rather than running the default
       context("t", marker(token)),
     ),
   ).toMatchObject({ action: "reject", message: "CLI Agents: Agent removed" });
+});
+
+it("injects Codex instructions only into the bound thread and rehydrates them on reload", async () => {
+  const f = await setup();
+  const selected = (await f.harness.behavior.callRpc("select", {
+    ...target,
+    providerId: "codex",
+    agentId: "reviewer",
+  })) as { token: string };
+  const ctx = context("codex_thread", marker(selected.token));
+  ctx.requestedExecution.providerId = "codex";
+  expect(await f.harness.registrations.hooks["message.dispatch"]!(ctx)).toEqual(
+    { action: "proceed" },
+  );
+  expect(
+    f.harness.registrations.instructionProvider!({
+      threadId: "codex_thread",
+      projectId: "project_a",
+    }),
+  ).toBe("Profile instruction");
+  expect(
+    f.harness.registrations.instructionProvider!({
+      threadId: "other",
+      projectId: "project_a",
+    }),
+  ).toBeNull();
+  expect(await f.bb.storage.kv.get("instructions:codex_thread")).toBe(
+    "Profile instruction",
+  );
+  const reloaded = createFakePluginHost({ pluginId: "cli-agents" });
+  await reloaded.bb.storage.kv.set(
+    "instructions:codex_thread",
+    "Profile instruction",
+  );
+  await plugin(reloaded.bb);
+  cleanup.push(() => reloaded.harness.lifecycle.dispose());
+  expect(
+    reloaded.harness.registrations.instructionProvider!({
+      threadId: "codex_thread",
+      projectId: "project_a",
+    }),
+  ).toBe("Profile instruction");
 });
