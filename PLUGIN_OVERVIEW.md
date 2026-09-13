@@ -1,4 +1,7 @@
-Pick a specialist before starting a chat and let the CLI load that agent's own instructions. The choice stays with the conversation, including later turns and plugin reloads.
+## Native Specialist Agent Picker for BB
+
+Pick a specialist before starting a chat and let Claude Code, OpenCode, or Codex load that agent's own instructions. The choice stays with the conversation, including later turns and plugin reloads.
+
 
 ## What you get
 

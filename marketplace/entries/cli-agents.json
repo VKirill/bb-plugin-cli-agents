@@ -7,13 +7,15 @@
   },
   "category": "agents-and-providers",
   "tags": [
+    "bb",
+    "bb-plugin",
     "agents",
     "claude-code",
     "opencode",
+    "codex",
     "composer",
     "remote",
     "instructions",
-    "codex",
     "profiles"
   ],
   "author": {

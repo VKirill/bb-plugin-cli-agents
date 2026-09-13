@@ -58,8 +58,30 @@
     "vaul": "^1.1.2",
     "vitest": "^5.0.0"
   },
+  "description": "Choose native Claude Code, OpenCode and Codex session agents in BB on local or remote machines.",
+  "keywords": [
+    "bb",
+    "bb-plugin",
+    "agents",
+    "claude-code",
+    "opencode",
+    "codex",
+    "multi-agent",
+    "agent-picker",
+    "ai-agents",
+    "developer-tools",
+    "cli"
+  ],
   "license": "MIT",
   "author": "VKirill",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VKirill/bb-plugin-cli-agents.git"
+  },
+  "homepage": "https://github.com/VKirill/bb-plugin-cli-agents#readme",
+  "bugs": {
+    "url": "https://github.com/VKirill/bb-plugin-cli-agents/issues"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

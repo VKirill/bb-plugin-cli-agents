@@ -1,6 +1,11 @@
-# CLI Agents for BB
+# CLI Agents for BB — Native Claude Code, OpenCode & Codex Session Agents Picker
 
-Choose a native session agent from the New thread composer, on the machine and in the project you selected. Claude Code and OpenCode load native agents themselves. Codex profiles supply additional instructions through BB. A choice belongs to one chat, not to every chat in the project.
+[![BB Compatibility](https://img.shields.io/badge/BB-%3E%3D0.43.0-blue.svg)](https://getbb.app)
+[![Plugin SDK](https://img.shields.io/badge/Plugin%20SDK-%3E%3D0.4.84-green.svg)](https://getbb.app)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/VKirill/bb-plugin-cli-agents?include_prereleases&color=orange)](https://github.com/VKirill/bb-plugin-cli-agents/releases)
+
+> Choose a native session agent directly from BB's New thread composer on any local or remote machine. Claude Code and OpenCode load native agents with zero configuration; Codex profiles supply custom developer instructions through BB's contribution pipeline. The agent identity is bound per-chat and survives turns and plugin reloads.
 
 ## Supported providers
 
@@ -80,5 +85,9 @@ Tests exercise native argv/config propagation, metadata parsing, primary-agent f
 Native references: [Claude CLI](https://code.claude.com/docs/en/cli-reference), [OpenCode agents](https://opencode.ai/docs/agents/), [OpenCode CLI](https://opencode.ai/docs/cli/).
 
 ## License
-
+ 
 MIT. BB-generated UI sources retain their upstream provenance.
+
+## Tags & Ecosystem
+`bb`, `bb-plugin`, `agents`, `claude-code`, `opencode`, `codex`, `multi-agent`, `agent-picker`, `ai-agents`, `developer-tools`, `cli`
+
