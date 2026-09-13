@@ -47,12 +47,14 @@ function AgentPicker() {
     };
   }, [projectId, rpc]);
   const [target, setTarget] = useState<Target | null>(null);
+  const [initialized, setInitialized] = useState(false);
   const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
   const request = useRef(0);
+  const prevTargetRef = useRef<Target | null>(null);
   useEffect(() => {
     const check = () => {
       try {
@@ -67,6 +69,8 @@ function AgentPicker() {
         );
       } catch {
         setTarget(null);
+      } finally {
+        setInitialized(true);
       }
     };
     check();
@@ -84,6 +88,28 @@ function AgentPicker() {
     setBusy(false);
     setOpen(false);
   }, [target]);
+
+  useEffect(() => {
+    if (!initialized || draftState.projectId !== projectId) return;
+    const mentions = ownMentions(draftState.draft);
+    if (!mentions.length) {
+      prevTargetRef.current = target;
+      return;
+    }
+    const prev = prevTargetRef.current;
+    if (
+      !target ||
+      (prev &&
+        (prev.providerId !== target.providerId ||
+          prev.hostId !== target.hostId ||
+          prev.projectId !== target.projectId))
+    ) {
+      try {
+        composer.updateText((text) => removeSelection(text, draftState.draft));
+      } catch {}
+    }
+    prevTargetRef.current = target;
+  }, [initialized, target, draftState, projectId, composer]);
 
   const refresh = async () => {
     if (!target) return;
@@ -120,6 +146,7 @@ function AgentPicker() {
         id: result.token,
         label: result.label,
       });
+      prevTargetRef.current = target;
       setOpen(false);
     } catch (e) {
       if (generation === request.current) setError((e as Error).message);

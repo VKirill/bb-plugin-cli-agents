@@ -206,3 +206,35 @@ it("injects Codex instructions only into the bound thread and rehydrates them on
     }),
   ).toBe("Profile instruction");
 });
+
+it("proceeds without configuring anything when execution provider does not support cli-agents (e.g. acp-cursor)", async () => {
+  const fake = await setup();
+  const { token } = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  })) as { token: string };
+  const ctx = context("cursor_thread", marker(token));
+  ctx.requestedExecution.providerId = "acp-cursor";
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  expect(await hook(ctx)).toEqual({ action: "proceed" });
+  expect(await fake.bb.storage.kv.get("thread:cursor_thread")).toBeUndefined();
+  expect(await fake.bb.storage.kv.get("env:cursor_thread")).toBeUndefined();
+});
+
+it("proceeds without configuring anything when selection belongs to a different CLI provider", async () => {
+  const fake = await setup();
+  const { token } = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    providerId: "claude-code",
+    agentId: "reviewer",
+  })) as { token: string };
+  const ctx = context("codex_thread", marker(token));
+  ctx.requestedExecution.providerId = "codex";
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  expect(await hook(ctx)).toEqual({ action: "proceed" });
+  expect(await fake.bb.storage.kv.get("thread:codex_thread")).toBeUndefined();
+  expect(
+    await fake.bb.storage.kv.get("instructions:codex_thread"),
+  ).toBeUndefined();
+});
+

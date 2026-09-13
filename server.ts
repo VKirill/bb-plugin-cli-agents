@@ -6,6 +6,7 @@ import type {
 import {
   hostContract,
   rpcContract,
+  providerSchema,
   selectionSchema,
   targetSchema,
   type Target,
@@ -121,6 +122,13 @@ export default async function plugin(bb: BbPluginApi) {
   // Mentions carry each choice through native submission, avoiding cross-tab races.
   bb.experimental_hooks.on("message.dispatch", async (ctx) => {
     try {
+      const isSupportedProvider = (
+        providerSchema.options as readonly string[]
+      ).includes(ctx.requestedExecution.providerId);
+      if (!isSupportedProvider) {
+        // This CLI provider does not support session agents or profiles; do not pass anything
+        return { action: "proceed" };
+      }
       const tokens = tokensFrom(ctx.input.blocks);
       if (tokens.length > 1)
         throw new Error("Select one session agent per chat.");
@@ -138,13 +146,16 @@ export default async function plugin(bb: BbPluginApi) {
         selected = selectionSchema.parse(candidate);
       }
       if (!selected) return { action: "proceed" };
+      if (selected.providerId !== ctx.requestedExecution.providerId) {
+        // Selection belongs to another CLI; do not pass it to this CLI
+        return { action: "proceed" };
+      }
       if (
         selected.projectId !== ctx.project.id ||
-        selected.hostId !== ctx.host?.id ||
-        selected.providerId !== ctx.requestedExecution.providerId
+        selected.hostId !== ctx.host?.id
       )
         throw new Error(
-          "The agent belongs to a different CLI, machine or project. Remove the Agent mention and choose it again.",
+          "The agent belongs to a different machine or project. Remove the Agent mention and choose it again.",
         );
       if (ctx.environment?.path && ctx.environment.path !== selected.cwd)
         throw new Error(

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+- Do not block thread dispatch when running on CLI providers that do not support session agents or profiles (e.g. Cursor, Antigravity).
+- Pass agents and profiles only to matching, supported CLI providers; silently proceed without configuration when provider does not match.
+- Automatically clear orphaned or mismatched transport mentions from composer draft when switching to an unsupported provider or different execution target.
+
 ## 0.2.1
 
 - Hide the duplicate Agent selection pill in the composer and chat messages; keep the selected agent in the dropdown.
