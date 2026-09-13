@@ -1,3 +1,4 @@
+import { mountSelectionPresentation } from "./lib/selection-presentation";
 import { useEffect, useState, useRef, useSyncExternalStore } from "react";
 import {
   definePluginApp,
@@ -288,6 +289,7 @@ function ThreadAgent() {
   ) : null;
 }
 export default definePluginApp((app) => {
+  app.contentScripts.register({ id: "selection-presentation", mount: ({ pluginId }) => mountSelectionPresentation(pluginId) });
   app.composer.customize({
     id: "agent-picker",
     scopes: ["new-thread"],

@@ -28,7 +28,7 @@ For development: `bb plugin dev`. Release artifacts in `dist/` contain server, f
 
 1. Choose a project, existing environment/machine, and Claude Code, Codex or OpenCode in BB.
 2. Open **Agent** (or **Profile** for Codex) in the composer action row and search the available agents.
-3. Choose one. BB inserts an **Agent: …** mention into the first message; it carries the selection through the native submission pipeline.
+3. Choose one. The dropdown displays the selection. An internal structured mention carries it through the native submission pipeline; its duplicate pill is hidden in the editor and chat.
 4. Send your request normally. The agent identity stays with this chat, including subsequent turns and plugin reloads.
 
 Before sending, select another agent to replace the mention or choose **Use default agent**. If you switch the machine, project, CLI or workspace after choosing an agent, select again. An incompatible selection is rejected before dispatch rather than silently starting the default agent. Existing conversations cannot change role through the picker.

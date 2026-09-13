@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Hide the duplicate Agent selection pill in the composer and chat messages; keep the selected agent in the dropdown.
+- Preserve native structured selection transport and leave other plugins and file mentions unchanged.
+- Remove the presentation style when the plugin is unloaded.
+
 ## 0.2.0
 
 - Add Codex Profile picker for file-based profiles (Codex 0.134+).
