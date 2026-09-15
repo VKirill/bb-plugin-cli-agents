@@ -106,24 +106,31 @@ describe("composer routing", () => {
   const storage = (values: Record<string, string>) => ({
     getItem: (k: string) => values[k] ?? null,
   });
-  it("uses tab-local machine/CLI ahead of other browser tabs", () => {
+  it("ignores the CLI another bb window left in shared storage", () => {
     const target = readTarget(
       "p",
       storage({
         "bb.promptbox.provider": "claude-code",
         "bb.promptbox.machine-p-1": "host_a",
       }),
-      storage({
-        "bb.promptbox.provider": "acp-opencode",
-        "bb.promptbox.machine-p-1": "host_b",
-      }),
+      { providerId: "acp-opencode", hostId: "host_b" },
     );
     expect(target?.hostId).toBe("host_a");
     expect(target?.providerId).toBe("claude-code");
   });
+  it("follows the CLI shown in this composer over any remembered one", () => {
+    const remembered = storage({
+      "bb.promptbox.provider": "claude-code",
+      "bb.promptbox.machine-p-1": "host_a",
+    });
+    expect(readTarget("p", remembered, null, "codex")?.providerId).toBe(
+      "codex",
+    );
+    expect(readTarget("p", remembered, null, "acp-cursor")).toBeNull();
+  });
   it("uses project defaults when the native composer has no explicit selection", () => {
     expect(
-      readTarget("p", storage({}), storage({}), {
+      readTarget("p", storage({}), {
         providerId: "claude-code",
         hostId: "host_a",
       })?.hostId,
@@ -131,11 +138,7 @@ describe("composer routing", () => {
   });
   it("rejects missing machines and unresolved new worktrees", () => {
     expect(
-      readTarget(
-        "p",
-        storage({ "bb.promptbox.provider": "codex" }),
-        storage({}),
-      ),
+      readTarget("p", storage({ "bb.promptbox.provider": "codex" })),
     ).toBeNull();
     expect(
       readTarget(
@@ -145,7 +148,6 @@ describe("composer routing", () => {
           "bb.promptbox.machine-p-1": "host_a",
           "bb.promptbox.environment-p-1": "provider:worktree",
         }),
-        storage({}),
       ),
     ).toBeNull();
   });

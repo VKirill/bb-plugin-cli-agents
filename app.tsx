@@ -8,7 +8,7 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import * as Popover from "@radix-ui/react-popover";
 import type { rpcContract, Catalog, Target } from "./contract";
-import { readTarget } from "./lib/composer-target";
+import { readTarget, composerProvider } from "./lib/composer-target";
 import { Icon } from "./components/ui/icon";
 import {
   subscribeDraft,
@@ -53,16 +53,18 @@ function AgentPicker() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
+  const [favorites, setFavorites] = useState<string[]>([]);
   const request = useRef(0);
   const prevTargetRef = useRef<Target | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const check = () => {
       try {
         const next = readTarget(
           projectId,
           sessionStorage,
-          localStorage,
           defaults,
+          composerProvider(triggerRef.current),
         );
         setTarget((old) =>
           JSON.stringify(old) === JSON.stringify(next) ? old : next,
@@ -75,10 +77,8 @@ function AgentPicker() {
     };
     check();
     const timer = setInterval(check, 500);
-    window.addEventListener("storage", check);
     return () => {
       clearInterval(timer);
-      window.removeEventListener("storage", check);
     };
   }, [projectId, defaults]);
   useEffect(() => {
@@ -86,7 +86,8 @@ function AgentPicker() {
     setCatalog(null);
     setError("");
     setBusy(false);
-    setOpen(false);
+    // Machine or CLI changed: reload this list instead of dropping the popover.
+    if (open) void refresh();
   }, [target]);
 
   useEffect(() => {
@@ -117,7 +118,11 @@ function AgentPicker() {
     setBusy(true);
     setError("");
     try {
-      const c = await rpc.call("catalog", target);
+      const [c, starred] = await Promise.all([
+        rpc.call("catalog", target),
+        rpc.call("favorites", { providerId: target.providerId }),
+      ]);
+      if (generation === request.current) setFavorites(starred);
       if (generation === request.current) setCatalog(c);
     } catch (e) {
       if (generation === request.current) setError((e as Error).message);
@@ -154,6 +159,24 @@ function AgentPicker() {
       if (generation === request.current) setBusy(false);
     }
   };
+  const star = async (agentId: string) => {
+    if (!target) return;
+    const pinned = !favorites.includes(agentId);
+    setFavorites((current) =>
+      pinned ? [...current, agentId] : current.filter((id) => id !== agentId),
+    );
+    try {
+      setFavorites(
+        await rpc.call("favorite", {
+          providerId: target.providerId,
+          agentId,
+          pinned,
+        }),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   if (!target) return null;
   return (
     <Popover.Root
@@ -165,6 +188,7 @@ function AgentPicker() {
     >
       <Popover.Trigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           aria-label="Choose CLI session agent"
           title="Choose a native session agent"
@@ -188,6 +212,9 @@ function AgentPicker() {
               {target?.providerId === "codex"
                 ? "Codex profile"
                 : "Session agent"}
+              <span className="ml-1 font-normal text-muted-foreground">
+                {target ? `· ${target.providerId}` : ""}
+              </span>
             </span>
             <button
               type="button"
@@ -232,24 +259,53 @@ function AgentPicker() {
                   .toLowerCase()
                   .includes(query.toLowerCase()),
               )
+              // Stable sort keeps each group alphabetical, starred ones on top.
+              .sort(
+                (a, b) =>
+                  Number(favorites.includes(b.id)) -
+                  Number(favorites.includes(a.id)),
+              )
               .map((a) => (
-                <button
+                <div
                   key={a.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void choose(a.id)}
-                  className="block w-full rounded-md px-2 py-2 text-left hover:bg-accent disabled:opacity-50"
+                  className="group flex items-start rounded-md hover:bg-accent"
                 >
-                  <div className="break-words text-sm font-medium">{a.id}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {a.source}
-                  </div>
-                  {a.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {a.description}
-                    </p>
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void choose(a.id)}
+                    className="block min-w-0 flex-1 rounded-md px-2 py-2 text-left disabled:opacity-50"
+                  >
+                    <div className="break-words text-sm font-medium">
+                      {a.id}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {a.source}
+                    </div>
+                    {a.description && (
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                        {a.description}
+                      </p>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={
+                      favorites.includes(a.id)
+                        ? `Unstar ${a.id}`
+                        : `Star ${a.id}`
+                    }
+                    aria-pressed={favorites.includes(a.id)}
+                    onClick={() => void star(a.id)}
+                    className={
+                      favorites.includes(a.id)
+                        ? "mr-1 mt-2 rounded-md p-1 text-amber-500 hover:text-amber-600"
+                        : "mr-1 mt-2 rounded-md p-1 text-muted-foreground opacity-0 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+                    }
+                  >
+                    <Icon name="Star" className="size-4" />
+                  </button>
+                </div>
               ))}
           </div>
           {catalog && !catalog.agents.length && !busy && (
@@ -316,7 +372,10 @@ function ThreadAgent() {
   ) : null;
 }
 export default definePluginApp((app) => {
-  app.contentScripts.register({ id: "selection-presentation", mount: ({ pluginId }) => mountSelectionPresentation(pluginId) });
+  app.contentScripts.register({
+    id: "selection-presentation",
+    mount: ({ pluginId }) => mountSelectionPresentation(pluginId),
+  });
   app.composer.customize({
     id: "agent-picker",
     scopes: ["new-thread"],

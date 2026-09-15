@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3
+
+- Resolve the CLI from the provider chip of the composer the picker is mounted in, so the list always matches the CLI shown in that chat.
+- Stop reading BB's shared localStorage copy of the remembered selection; another window or chat can no longer leak its CLI into this picker.
+- Reload the agent list in place when the machine or CLI changes instead of closing the popover.
+- Star agents to keep them at the top of the list; stars are stored per CLI on the BB server and shared across windows and machines.
+- Show the resolved CLI next to the picker heading.
+
 ## 0.2.2
 
 - Do not block thread dispatch when running on CLI providers that do not support session agents or profiles (e.g. Cursor, Antigravity).

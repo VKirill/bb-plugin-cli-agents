@@ -65,4 +65,16 @@ export const rpcContract = defineRpcContract({
     input: z.object({ threadId: z.string() }),
     output: selectionSchema.nullable(),
   },
+  favorites: {
+    input: z.object({ providerId: providerSchema }),
+    output: z.array(z.string().max(200)).max(200),
+  },
+  favorite: {
+    input: z.object({
+      providerId: providerSchema,
+      agentId: z.string().min(1).max(200),
+      pinned: z.boolean(),
+    }),
+    output: z.array(z.string().max(200)).max(200),
+  },
 });

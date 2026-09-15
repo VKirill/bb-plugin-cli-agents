@@ -89,6 +89,13 @@ export default async function plugin(bb: BbPluginApi) {
     await bb.storage.kv.set(`selection:${s.token}`, s);
     return { token: s.token, label: `Agent: ${agentId}` };
   }
+  // Starred agents float to the top of the picker; kept per CLI for every machine.
+  async function favorites(providerId: string) {
+    const stored = await bb.storage.kv.get<string[]>(`favorites:${providerId}`);
+    return Array.isArray(stored)
+      ? stored.filter((id) => typeof id === "string").slice(0, 200)
+      : [];
+  }
   bb.rpc.register(rpcContract, {
     defaults: async ({ projectId }) => {
       const project = await bb.sdk.projects.get({ projectId });
@@ -105,6 +112,13 @@ export default async function plugin(bb: BbPluginApi) {
     catalog,
     select: ({ agentId, ...target }) => select(target, agentId),
     thread: ({ threadId }) => binding(threadId),
+    favorites: ({ providerId }) => favorites(providerId),
+    favorite: async ({ providerId, agentId, pinned }) => {
+      const rest = (await favorites(providerId)).filter((id) => id !== agentId);
+      const next = pinned ? [...rest, agentId].slice(-200) : rest;
+      await bb.storage.kv.set(`favorites:${providerId}`, next);
+      return next;
+    },
   });
   bb.ui.registerMentionProvider({
     id: "selection",
@@ -115,7 +129,10 @@ export default async function plugin(bb: BbPluginApi) {
       if (!s)
         throw new Error("Agent selection is missing. Choose the agent again.");
       return {
-        context: s.providerId === "codex" ? `${marker(token)}\nCodex instruction profile selected: ${s.agentId}. CLI Agents contributes its developer instructions through BB; other profile settings are not applied.` : `${marker(token)}\nNative session agent selected: ${s.agentId}. CLI Agents applies this identity at process startup.`,
+        context:
+          s.providerId === "codex"
+            ? `${marker(token)}\nCodex instruction profile selected: ${s.agentId}. CLI Agents contributes its developer instructions through BB; other profile settings are not applied.`
+            : `${marker(token)}\nNative session agent selected: ${s.agentId}. CLI Agents applies this identity at process startup.`,
       };
     },
   });

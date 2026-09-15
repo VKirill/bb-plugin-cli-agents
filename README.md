@@ -34,9 +34,10 @@ For development: `bb plugin dev`. Release artifacts in `dist/` contain server, f
 1. Choose a project, existing environment/machine, and Claude Code, Codex or OpenCode in BB.
 2. Open **Agent** (or **Profile** for Codex) in the composer action row and search the available agents.
 3. Choose one. The dropdown displays the selection. An internal structured mention carries it through the native submission pipeline; its duplicate pill is hidden in the editor and chat.
+   Star the agents you use most: starred ones stay at the top of the list. Stars are kept per CLI on the BB server, so they follow you across windows and machines.
 4. Send your request normally. The agent identity stays with this chat, including subsequent turns and plugin reloads.
 
-Before sending, select another agent to replace the mention or choose **Use default agent**. If you switch the machine, project, CLI or workspace after choosing an agent, select again. An incompatible selection is rejected before dispatch rather than silently starting the default agent. Existing conversations cannot change role through the picker.
+Before sending, select another agent to replace the mention or choose **Use default agent**. Switching the CLI or machine reloads the list for the new target; if an agent was already chosen, select again. An incompatible selection is rejected before dispatch rather than silently starting the default agent. Existing conversations cannot change role through the picker.
 
 The search reads agent metadata without exposing full instruction bodies. Codex profile developer instructions are transferred to BB and stored per thread for reload persistence; Claude and OpenCode instruction bodies remain managed by their CLIs. Claude plugin names retain their namespace, for example `lane-stack:dev-orchestrator`. Changes to agent instructions in an existing session follow the CLI's own persistence rules; start a new chat to guarantee fresh instructions.
 
@@ -68,7 +69,7 @@ Commands return bounded JSON. `select` returns a marker that can accompany a new
 - Claude uses a plugin-owned executable shim selected with `BB_CLAUDE_CODE_EXECUTABLE`. It passes the agent as a literal argument and preserves BB's remaining arguments, permission mode and model.
 - Stock OpenCode ACP uses a plugin-owned PATH shim. It merges `default_agent` into existing `OPENCODE_CONFIG_CONTENT`, preserves other configuration fields and restores PATH before launching the real CLI. Custom ACP definitions that launch an absolute executable or override PATH are not supported.
 - No user/project CLI settings or agent files are modified. Launchers are stored in BB's host-side plugin data directory. Selection metadata is stored in the plugin's BB key-value store.
-- The picker reads BB 0.43's remembered-selection keys (sessionStorage first, localStorage fallback) because the public composer hook does not expose the execution tuple. This internal read-only integration is version-bounded and tested. It does not patch BB files or intercept requests.
+- The picker reads the CLI from the provider chip BB renders in the same composer, and falls back to BB 0.43's remembered-selection keys in that window's sessionStorage, then the project's default execution options, because the public composer hook does not expose the execution tuple. This internal read-only integration is version-bounded and tested. It never writes BB's own keys, does not patch BB files and does not intercept requests.
 - Windows, managed policy-only Claude agent locations, ad hoc terminal `--plugin-dir` arguments and arbitrary shell aliases are not supported by discovery in this version.
 - Listing may load the CLI's normal project configuration/plugins. Model calls use your existing provider subscription or API account. The plugin has no separate service, telemetry or account.
 
