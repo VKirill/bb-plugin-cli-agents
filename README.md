@@ -65,7 +65,7 @@ Commands return bounded JSON. `select` returns a marker that can accompany a new
 ## Implementation and limits
 
 - All discovery and launcher preparation run through typed BB host RPC on the selected machine. No SSH configuration is required.
-- A durable selection token travels in the first message's plugin mention. The dispatch hook validates project, provider, machine and workspace and checks that the agent still exists. Separate tabs do not share a mutable selection.
+- A durable selection token travels in the first message's plugin mention. The dispatch hook validates project, provider and machine, follows the chat into its actual folder of the same project (a section or another checkout folder), and checks that the agent exists there. Separate tabs do not share a mutable selection.
 - Claude uses a plugin-owned executable shim selected with `BB_CLAUDE_CODE_EXECUTABLE`. It passes the agent as a literal argument and preserves BB's remaining arguments, permission mode and model.
 - Stock OpenCode ACP uses a plugin-owned PATH shim. It merges `default_agent` into existing `OPENCODE_CONFIG_CONTENT`, preserves other configuration fields and restores PATH before launching the real CLI. Custom ACP definitions that launch an absolute executable or override PATH are not supported.
 - No user/project CLI settings or agent files are modified. Launchers are stored in BB's host-side plugin data directory. Selection metadata is stored in the plugin's BB key-value store.

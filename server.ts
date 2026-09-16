@@ -174,10 +174,13 @@ export default async function plugin(bb: BbPluginApi) {
         throw new Error(
           "The agent belongs to a different machine or project. Remove the Agent mention and choose it again.",
         );
-      if (ctx.environment?.path && ctx.environment.path !== selected.cwd)
-        throw new Error(
-          "The workspace changed. Choose an agent in the target workspace before starting this chat.",
-        );
+      // The agent is picked before the chat has a workspace, so the selection
+      // records the project checkout. BB (or a plugin such as Projects &
+      // Sections) may then run the chat in another folder of the same project;
+      // follow that folder. `prepare` below checks the agent exists there.
+      const workspace = ctx.environment?.path;
+      if (workspace && workspace !== selected.cwd)
+        selected = { ...selected, cwd: workspace };
       const prepared = await host.call(
         "prepare",
         {

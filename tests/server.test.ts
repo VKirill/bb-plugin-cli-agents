@@ -9,7 +9,7 @@ const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
   for (const f of cleanup.splice(0)) await f();
 });
-async function setup() {
+async function setup(agentsIn: (cwd: string) => boolean = () => true) {
   let available = true;
   const fake = createFakePluginHost({
     pluginId: "cli-agents",
@@ -46,6 +46,9 @@ async function setup() {
       },
     },
     experimental_callHostRpc: async ({ method, input }) => {
+      const cwd = (input as { cwd?: string }).cwd ?? "";
+      if (method === "prepare" && !agentsIn(cwd))
+        throw new Error(`Agent reviewer is not available in ${cwd}.`);
       if (method === "discover")
         return {
           agents: [
@@ -86,12 +89,17 @@ const target = {
   providerId: "claude-code",
   environmentId: null,
 };
-function context(threadId: string, text: string, hostId = "host_a") {
+function context(
+  threadId: string,
+  text: string,
+  hostId = "host_a",
+  path = "/workspace",
+) {
   return makeMessageDispatchHookContext({
     thread: { id: threadId, projectId: "project_a", providerId: "claude-code" },
     project: { id: "project_a" },
     host: { id: hostId },
-    environment: { hostId, projectId: "project_a", path: "/workspace" },
+    environment: { hostId, projectId: "project_a", path },
     requestedExecution: { providerId: "claude-code" },
     input: { text, blocks: [{ type: "text", text, mentions: [] }] },
   });
@@ -238,3 +246,38 @@ it("proceeds without configuring anything when selection belongs to a different 
   ).toBeUndefined();
 });
 
+
+it("follows the chat into a section folder of the same project instead of rejecting later messages", async () => {
+  const fake = await setup();
+  const { token } = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  })) as { token: string };
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  // The first message runs before the section workspace exists.
+  expect(await hook(context("t", marker(token)))).toEqual({ action: "proceed" });
+  // Later messages run in the section folder the chat was started in.
+  expect(
+    await hook(context("t", "second message", "host_a", "/workspace/apps/bot")),
+  ).toEqual({ action: "proceed" });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "t" }),
+  ).toMatchObject({ agentId: "reviewer", cwd: "/workspace/apps/bot" });
+  expect(
+    await hook(context("t", "third message", "host_a", "/workspace/apps/bot")),
+  ).toEqual({ action: "proceed" });
+});
+
+it("rejects with a clear reason when the agent does not exist in the chat folder", async () => {
+  const fake = await setup((cwd) => cwd === "/workspace");
+  const { token } = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  })) as { token: string };
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  const result = (await hook(
+    context("t", marker(token), "host_a", "/elsewhere"),
+  )) as { action: string; message?: string };
+  expect(result.action).toBe("reject");
+  expect(result.message).toContain("/elsewhere");
+});

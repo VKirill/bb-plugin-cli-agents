@@ -14,7 +14,7 @@ Pick a specialist before starting a chat and let Claude Code, OpenCode, or Codex
 
 ## How it works
 
-The first message carries a durable selection. Before dispatch, CLI Agents checks that the machine, project, provider and workspace match and that the agent still exists. Claude starts with its native `--agent` option. OpenCode's ACP process receives its native default-agent configuration. Your CLI settings and agent instruction files are not edited. When switching away from supported CLIs, selection mentions are cleared automatically from the composer, and unsupported providers proceed normally without configuration.
+The first message carries a durable selection. Before dispatch, CLI Agents checks that the machine, project and provider match, follows the chat into the folder it actually runs in, and checks that the agent exists there. Claude starts with its native `--agent` option. OpenCode's ACP process receives its native default-agent configuration. Your CLI settings and agent instruction files are not edited. When switching away from supported CLIs, selection mentions are cleared automatically from the composer, and unsupported providers proceed normally without configuration.
 
 Agents can inspect available roles with `bb cli-agents list` and a chat's selection with `bb cli-agents thread`.
 

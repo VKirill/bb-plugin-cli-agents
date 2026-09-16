@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- Fix "The workspace changed" rejecting the second message of a chat started in a project section (for example from Projects & Sections) or moved to another folder. The agent is picked before the chat has a workspace, so the selection recorded the project checkout; CLI Agents now follows the chat's real folder in the same project and machine and rebinds the agent there.
+- When the agent does not exist in the chat's folder, the rejection names the folder instead of a generic workspace error.
+
 ## 0.2.3
 
 - Resolve the CLI from the provider chip of the composer the picker is mounted in, so the list always matches the CLI shown in that chat.

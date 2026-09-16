@@ -13,7 +13,7 @@ export default experimental_defineHostEntry({
       const catalog = await discover(providerId, cwd, ctx.signal);
       if (!catalog.supported || !catalog.agents.some((a) => a.id === agentId))
         throw new Error(
-          `Agent ${agentId} is no longer available in this workspace.`,
+          `Agent ${agentId} is not available in ${cwd}. Start a new chat and choose an agent available in this folder.`,
         );
       if (providerId === "codex") {
         await codexInstructions(agentId);
