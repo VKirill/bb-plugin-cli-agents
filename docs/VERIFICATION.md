@@ -1,21 +1,56 @@
-# Verification — 0.1.0
+---
+title: Verification gotchas
+type: gotchas
+created: 2026-09-12
+updated: 2026-09-27
+status: active
+confidence: medium
+tags: [verification, adapters, integration]
+sources:
+  - tests/adapters.test.ts
+  - tests/server.test.ts
+  - package.json
+  - server.ts
+  - host.ts
+---
 
-## Automated
+# Verification gotchas
 
-`npm run typecheck`, `npm test` and `bb plugin build` verify the TypeScript contracts, adapter behavior, server-side hook behavior and all three distributable bundles.
+TL;DR: Automated coverage includes handoff state and binding cases, while the live BB results below cover the Claude Code, OpenCode, and Codex adapter paths.
 
-The tests cover literal Claude argument passing, permission-argument preservation, OpenCode inline-config merge and PATH restoration, subagent filtering, plugin-agent metadata parsing, path containment, tab-local target selection, default selection, unsupported providers/worktree targets, precise mention removal, thread isolation, reload persistence and missing-agent rejection.
+## Critical
 
-## Live BB integration
+### Handoff has automated coverage but no recorded live BB check
 
-Verified on BB 0.43.0 with an enrolled Linux host:
+**Problem:** Handoff label parsing, draft isolation, project lookup, and pending binding are exercised through unit tests (`tests/adapters.test.ts:208-245`, `tests/server.test.ts:291-389`).
 
-- Claude Code 2.1.269: selected an installed plugin's namespaced agent through the graphical menu, sent a no-tools identity check through the ordinary composer, and received `CLI_AGENTS_OK — dev-orchestrator`. The plugin's bound selection retained the exact native identity `lane-stack:dev-orchestrator`.
-- OpenCode 1.14.48 through the stock `acp-opencode` provider: selected `lane-reviewer`, started a BB session on the same remote checkout and received `CLI_AGENTS_OK lane-reviewer`.
-- Both verification conversations were stopped and archived after completion.
+**Risk:** These tests do not exercise the actual BB handoff interface or a live submitted handoff (`tests/adapters.test.ts:208-245`, `tests/server.test.ts:291-389`).
 
-These are adapter/session checks, not benchmarks or permission-policy certification. They confirm the existing installed providers and native CLI versions listed above. Windows and custom absolute-path OpenCode ACP definitions were not tested and are not supported by this release.
+**Workaround:** Run a live handoff check on the deployed BB version before treating UI integration as verified.
 
-## 0.2.0 Codex verification
+## High
 
-Codex 0.154.0 on macOS and enrolled Linux: fresh BB conversations received developer instructions from selected file profiles. The macOS test returned a unique control phrase that appeared only in the profile, not the user prompt. No tools or database operations were requested. This verifies instruction-profile support only; native app-server rejects --profile and full profile configuration is intentionally not applied.
+### Package checks do not establish host-specific CLI behavior
+
+**Problem:** The package declares typecheck, test, and build commands (`package.json:85-90`).
+
+**Risk:** Passing package checks alone does not establish that a selected host has a compatible CLI or that its native process uses the requested agent (`host.ts:12-27`).
+
+**Workaround:** Verify the target machine and CLI with the checks in [deployment](deployment.md); live checks are recorded below.
+
+## Medium
+
+### Live checks cover specific recorded versions and paths
+
+**Problem:** Recorded live checks exercised Claude Code 2.1.269 and OpenCode 1.14.48 on BB 0.43.0 with an enrolled Linux host. Codex 0.154.0 instruction contribution was checked on macOS and enrolled Linux.
+
+**Risk:** These checks do not cover Windows, custom absolute-path OpenCode ACP configurations, or general permission-policy behavior.
+
+**Workaround:** Treat the recorded results as evidence for those versions and paths only; unsupported and platform-specific behavior is listed in [gotchas](gotchas.md).
+
+## Live adapter checks
+
+- Claude Code 2.1.269: selected an installed plugin's namespaced agent through the graphical menu, sent a no-tools identity check through the ordinary composer, and received `CLI_AGENTS_OK — dev-orchestrator`. The bound identity was `lane-stack:dev-orchestrator`.
+- OpenCode 1.14.48 through the stock `acp-opencode` provider: selected `lane-reviewer`, started a BB session on the same remote checkout, and received `CLI_AGENTS_OK lane-reviewer`.
+- The verification conversations were stopped and archived after completion.
+- Codex 0.154.0: fresh BB conversations received developer instructions from selected file profiles on macOS and enrolled Linux. The macOS check returned a control phrase present only in the profile. This validates instruction-profile support; it does not claim that other profile settings are applied.
