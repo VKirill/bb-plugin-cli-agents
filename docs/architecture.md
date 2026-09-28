@@ -2,9 +2,9 @@
 title: CLI Agents architecture
 type: architecture
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 status: active
-confidence: high
+confidence: medium
 tags: [architecture, rpc, dispatch]
 sources:
   - server.ts
@@ -103,7 +103,7 @@ sequenceDiagram
   S-->>B: proceed
 ```
 
-The app calls `select`, which resolves the target checkout, verifies the identity by host discovery, and stores token and pending records. The composer submits a normal prompt; dispatch reads pending project/provider state when no token mention is present, then stores thread and environment records (`app.tsx:224-254`, `server.ts:38-60`, `server.ts:73-101`, `server.ts:157-232`). The CLI `select` command also returns a marker for a new-chat prompt (`server.ts:260-283`).
+The app calls `select`, which resolves the target checkout, verifies the identity by host discovery, and stores token and pending records. The composer submits a normal prompt; dispatch reads pending project/provider state when no token mention is present, then stores thread and environment records (`app.tsx:224-254`, `server.ts:38-60`, `server.ts:73-101`, `server.ts:157-232`). The CLI `select` command also returns a marker for a new-chat prompt (`server.ts:250-293`).
 
 ### Handoff composer
 

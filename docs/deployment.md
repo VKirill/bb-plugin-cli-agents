@@ -2,13 +2,13 @@
 title: CLI Agents deployment
 type: deployment
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 status: active
 confidence: medium
 tags: [deployment, installation, bb-plugin]
 sources:
   - package.json
-  - README.md
+  - docs/overview.md
   - host.ts
   - adapters/discovery.ts
   - server.ts
@@ -22,8 +22,8 @@ TL;DR: Build the package with the declared npm scripts, install the local plugin
 
 ## Prerequisites
 
-- Node.js with npm and the BB CLI available in the shell; the quick start uses these commands and the package declares its check scripts (`README.md:7-11`, `package.json:85-90`).
-- BB 0.43.x and Plugin SDK 0.4.84.x (`package.json:5-8`).
+- Node.js with npm and the BB CLI available in the shell; the package declares its build and check scripts (`package.json:85-90`). See the [overview quick start](overview.md#quick-start).
+- BB 0.43.0 or later and Plugin SDK 0.4.84 or later (`package.json:5-8`).
 - macOS or Linux and the supported CLI installed on the selected BB machine; discovery reports Windows unsupported and resolves the executable on the host (`adapters/discovery.ts:34-50`, `adapters/discovery.ts:240-253`).
 - A BB project checkout or a matching environment path on a connected machine (`server.ts:38-60`).
 
@@ -36,7 +36,7 @@ TL;DR: Build the package with the declared npm scripts, install the local plugin
    npm run build
    ```
 
-2. Install the local package source into BB (`README.md:5-11`).
+2. Install the local package source into BB using the [overview quick-start command](overview.md#quick-start); the package manifest declares the BB plugin entry points (`package.json:9-20`).
 
    ```sh
    bb plugin install .
@@ -54,7 +54,7 @@ TL;DR: Build the package with the declared npm scripts, install the local plugin
 ## Rollback
 
 1. Check out the previous release tag or commit in a clean working tree.
-2. From that checkout, run `npm ci`, `npm run build`, then `bb plugin install .` to reinstall that source (`README.md:10-17`, `package.json:85-89`).
+2. From that checkout, run `npm ci`, `npm run build`, then `bb plugin install .` to reinstall that source (`package.json:9-20`, `package.json:85-89`; see the [overview quick start](overview.md#quick-start)).
 3. Run `bb plugin reload cli-agents` so the server, app, and host bundles use the restored source.
 
 ## Troubleshooting

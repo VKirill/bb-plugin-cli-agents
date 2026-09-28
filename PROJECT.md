@@ -1,6 +1,6 @@
 ---
 title: CLI Agents project facts
-updated: 2026-09-27
+updated: 2026-09-28
 sources:
   - package.json
   - app.tsx
@@ -20,7 +20,7 @@ sources:
 ## Identity
 
 - BB plugin for native session agents in Claude Code, OpenCode, and Codex (`package.json:9-20`, `contract.ts:3`).
-- Runtime bounds: BB `>=0.43.0 <0.44.0`; Plugin SDK `>=0.4.84 <0.5.0` (`package.json:5-8`).
+- Runtime bounds: BB `>=0.43.0`; Plugin SDK `>=0.4.84` (`package.json:5-8`).
 
 ## Entry points
 

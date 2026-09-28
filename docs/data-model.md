@@ -2,12 +2,14 @@
 title: CLI Agents data model
 type: data-model
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 status: active
 confidence: medium
 tags: [data-model, key-value, selection]
 sources:
   - server.ts
+  - app.tsx
+  - lib/draft-selection.ts
   - contract.ts
   - adapters/launch.ts
   - adapters/codex.ts
@@ -59,10 +61,16 @@ erDiagram
     string providerId PK
     string agentIds
   }
+  COMPOSER_SESSION_SELECTION {
+    string projectId PK
+    string providerId PK
+    string agentId
+  }
   SELECTION_TOKEN ||--o| PENDING_SELECTION : "referenced by token"
   SELECTION_TOKEN ||--o| THREAD_BINDING : "copied into binding"
   THREAD_BINDING ||--o{ THREAD_ENVIRONMENT : "selects launch values"
   THREAD_BINDING ||--o| THREAD_INSTRUCTIONS : "Codex only"
+  PENDING_SELECTION }o..o| COMPOSER_SESSION_SELECTION : "mirrored in composer session"
 ```
 
 Record schemas and key construction are in the server's KV accessors and the `Selection` and `envSchema` contracts (`server.ts:63-108`, `server.ts:227-248`, `contract.ts:19-35`).
@@ -81,14 +89,14 @@ Purpose: preserve the structured mention's selection payload for message resolut
 | `environmentId` | Selected BB environment ID, or `null` for project checkout. |
 | `agentId` | Provider-native agent or profile identity. |
 | `cwd` | Absolute working directory resolved when selected; dispatch can replace it with the actual chat environment path. |
-| `token` | UUID attached to the selection mention. |
+| `token` | UUID used to look up the record when a structured selection mention is submitted (`server.ts:141-155`). |
 | `createdAt` | Unix epoch timestamp in milliseconds from `Date.now()`. |
 
 The runtime validator and allowed providers are defined in `contract.ts:3-31`; dispatch's folder rebinding is in `server.ts:205-219`.
 
 ### Pending selection — `pending:<projectId>:<providerId>`
 
-Purpose: hold the most recently selected identity for the next matching new-chat dispatch without requiring a mention token in the submitted text (`server.ts:89-101`, `server.ts:182-193`). The value is a full Selection record.
+Purpose: hold the most recently selected identity for the next matching new-thread dispatch, including a handoff that creates a new thread, without requiring a mention token in the submitted text (`server.ts:89-101`, `server.ts:182-193`, `app.tsx:60-73`). The value is a full Selection record.
 
 | Field | Meaning |
 | --- | --- |
@@ -134,21 +142,38 @@ Purpose: retain starred agent IDs per provider (`server.ts:103-108`, `server.ts:
 | `providerId` | CLI provider whose picker list uses the saved favorites. |
 | Value | Ordered string array, filtered to strings and capped at 200 on read; pinning also retains the most recent 200 (`server.ts:103-108`, `server.ts:133-138`). |
 
+### Composer session selection — `bb.cli-agents.selected:<projectId>:<providerId>`
+
+Purpose: cache the selected agent ID in the browser session so the picker can restore its label for the matching project and CLI (`app.tsx:40-54`, `app.tsx:143-182`).
+
+| Field | Meaning |
+| --- | --- |
+| `projectId` | BB project scope encoded in the key. |
+| `providerId` | Supported CLI scope encoded in the key. |
+| Value | Selected provider-native agent or profile ID; after a successful `pending` RPC the picker synchronizes it from the server's pending Selection record. |
+
+The picker writes this cache after selection and after reading a pending record; it removes the key when no pending agent is returned or when the user chooses the default agent (`app.tsx:143-182`, `app.tsx:227-269`).
+
+If the `pending` RPC rejects, the catch handler leaves the previously read session cache untouched (`app.tsx:148-178`).
+
 ## Selection lifecycle
 
 | From | To | Function and location | When |
 | --- | --- | --- | --- |
 | No pending value | Pending selection | `select` (`server.ts:73-91`) | After host rediscovery confirms the chosen ID; writes both token and project/provider pending records. |
-| Pending selection | Consumed | `message.dispatch` (`server.ts:182-191`) | A dispatch has no mention-bound selection and the pending record matches the dispatch host; the pending key is deleted. |
-| Pending selection | Pending selection | `message.dispatch` (`server.ts:182-191`) | The pending selection belongs to another host; it is not consumed. |
+| Pending selection | Consumed | `message.dispatch` (`server.ts:182-191`) | A dispatch has no mention-bound selection; the pending record is consumed when its host matches the dispatch host or the dispatch has no host ID. |
+| Pending selection | Pending selection | `message.dispatch` (`server.ts:182-191`) | The dispatch has a host ID that differs from the pending selection's host ID. |
 | Pending selection | Removed | `clearPending` (`server.ts:93-101`, `server.ts:125-127`) | The picker invokes `clearPending` for the target project and provider. |
+| No cached agent | Cached agent ID | `AgentPicker` (`app.tsx:227-241`) | Selection succeeds; the provider-native agent ID is stored in browser `sessionStorage`. |
+| Cached agent ID | Cached agent ID or no cache | `AgentPicker` (`app.tsx:143-182`) | The picker mirrors the pending server selection into the cache, or removes the cache when no pending agent exists. |
+| Cached agent ID | No cached agent | `clearSelection` (`app.tsx:256-269`) | The user chooses “Use default agent”; the picker removes the cache and requests pending-record deletion. |
 | Selected | Thread binding | `message.dispatch` (`server.ts:227-232`) | Host preparation succeeds; the selected record and environment entries are stored by thread ID. |
 
-None of these records has a status field. The selection-token record has no delete call in the plugin server; the source defines no TTL or cleanup job for these KV prefixes (`server.ts:73-101`, `server.ts:141-155`, `server.ts:227-248`).
+None of these records has a status field. The selection-token record has no delete call in the plugin server; the source defines no TTL or cleanup job for these KV prefixes (`server.ts:73-101`, `server.ts:141-155`, `server.ts:227-248`). The composer cache has the explicit removal paths listed above (`app.tsx:143-182`, `app.tsx:256-269`).
 
 ## Invariants and use cases
 
-- Selection, pending, thread-binding, environment, instruction, and favorite records are written and read by the BB server (`server.ts:73-108`, `server.ts:227-248`).
+- Selection, pending, thread-binding, environment, instruction, and favorite records are written and read by the BB server; the composer session cache is written and read by the app (`server.ts:73-108`, `server.ts:227-248`, `app.tsx:143-182`).
 - Pending selection is scoped by project and provider. Dispatch also checks the selected host before consuming it (`server.ts:89-101`, `server.ts:182-191`).
 - A binding stores the selection per thread; dispatch rejects replacing an existing binding with a different token (`server.ts:170-181`, `server.ts:227-232`).
 - Codex instructions are loaded from all `instructions:` keys during server startup and only strings up to 4096 characters enter the in-memory contribution map (`server.ts:28-36`).

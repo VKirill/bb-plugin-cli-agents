@@ -54,3 +54,4 @@ The BB install command is also listed in the root [README](../README.md).
 ## Referenced by
 
 - [CLI Agents architecture](architecture.md)
+- [CLI Agents deployment](deployment.md)
