@@ -2,7 +2,7 @@
 title: CLI Agents overview
 type: overview
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-01
 status: active
 confidence: medium
 tags: [cli-agents, overview, bb-plugin]
@@ -12,6 +12,8 @@ sources:
   - contract.ts
   - server.ts
   - adapters/launch.ts
+  - lib/handoff-mode.ts
+  - lib/draft-selection.ts
 ---
 
 # CLI Agents overview
@@ -20,7 +22,7 @@ TL;DR: CLI Agents adds a BB composer picker that selects a native Claude Code, O
 
 ## What it is
 
-CLI Agents is a BB plugin with a frontend composer action, a BB server module, and a host entry for machine-side CLI discovery and process setup (`package.json:9-20`). The picker is registered for new-thread and thread composers; in thread scope it appears for handoff composers (`app.tsx:495-510`, `app.tsx:23-38`).
+CLI Agents is a BB plugin with a frontend composer action, a BB server module, and a host entry for machine-side CLI discovery and process setup (`package.json:9-20`). The picker is registered for new-thread and thread composers; in thread scope it appears for handoff composers, resolves the source thread’s project, and saves its choice in the project/provider pending record for the new thread (`app.tsx:495-505`, `app.tsx:23-38`, `lib/handoff-mode.ts:1-32`, `server.ts:89-101`).
 
 The plugin supports three BB provider IDs: `claude-code`, `acp-opencode`, and `codex` (`contract.ts:3`). Claude Code and OpenCode receive native launch configuration; Codex selection contributes the profile's developer instructions through BB (`server.ts:221-228`, `adapters/launch.ts:29-60`).
 

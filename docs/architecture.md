@@ -2,7 +2,7 @@
 title: CLI Agents architecture
 type: architecture
 created: 2026-09-27
-updated: 2026-09-28
+updated: 2026-10-01
 status: active
 confidence: medium
 tags: [architecture, rpc, dispatch]
@@ -103,7 +103,7 @@ sequenceDiagram
   S-->>B: proceed
 ```
 
-The app calls `select`, which resolves the target checkout, verifies the identity by host discovery, and stores token and pending records. The composer submits a normal prompt; dispatch reads pending project/provider state when no token mention is present, then stores thread and environment records (`app.tsx:224-254`, `server.ts:38-60`, `server.ts:73-101`, `server.ts:157-232`). The CLI `select` command also returns a marker for a new-chat prompt (`server.ts:250-293`).
+The app calls `select`, which resolves the target checkout, verifies the identity by host discovery, and stores token and pending records. The composer does not insert the returned selection mention: when neither a token mention nor an existing thread binding supplies a selection, dispatch reads pending project/provider state and then stores thread and environment records (`app.tsx:227-249`, `server.ts:38-60`, `server.ts:73-101`, `server.ts:157-232`). The CLI `select` command still returns a marker for a new-chat prompt (`server.ts:250-283`). A pending record whose non-empty host differs from the dispatch host is left in storage and is not applied to that dispatch (`server.ts:182-191`).
 
 ### Handoff composer
 
@@ -123,7 +123,7 @@ sequenceDiagram
   S->>S: bind choice to newThreadId
 ```
 
-The public composer scope remains `thread`; `isHandoffComposer` recognizes English and Russian handoff labels, and draft keys separate handoff text from new-thread text (`lib/handoff-mode.ts:1-33`, `lib/draft-selection.ts:21-51`). The app resolves the source thread's project and maintains pending selection through the new thread dispatch (`app.tsx:23-38`, `app.tsx:60-74`, `server.ts:182-232`).
+The public composer scope remains `thread`; `isHandoffComposer` recognizes English and Russian handoff labels, and draft keys separate handoff text from new-thread text (`lib/handoff-mode.ts:1-33`, `lib/draft-selection.ts:21-51`). The app resolves the source thread's project, selects through the project/provider pending record, and dispatch binds that selection to the new thread (`app.tsx:23-38`, `app.tsx:60-73`, `server.ts:89-101`, `server.ts:182-232`).
 
 ## Invariants
 

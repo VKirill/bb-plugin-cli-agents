@@ -2,7 +2,7 @@
 title: CLI Agents gotchas
 type: gotchas
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-01
 status: active
 confidence: medium
 tags: [gotchas, compatibility, limitations]
@@ -38,9 +38,9 @@ TL;DR: Composer integration depends on BB 0.43 behavior, target resolution rejec
 
 ### Unsupported composer targets have no working picker
 
-**Problem:** Target resolution only accepts the three provider IDs and a host ID with the `host_` prefix; unsupported environment variants return no target (`lib/composer-target.ts:14-43`).
+**Problem:** Target resolution only accepts the three provider IDs and a host ID with the `host_` prefix; unsupported environment variants return no target. A mounted composer whose provider chip has no logo resolves to `unknown`, which also fails provider validation (`lib/composer-target.ts:14-43`, `lib/composer-target.ts:45-58`).
 
-**Risk:** The picker is absent when BB cannot resolve a supported provider, machine, or environment from the composer (`app.tsx:293-294`).
+**Risk:** The picker is absent when BB cannot resolve a supported provider, machine, or environment from the composer (`app.tsx:107-125`, `app.tsx:296`).
 
 **Workaround:** Select a supported CLI and a project checkout or reusable environment on a connected host before opening the picker (`server.ts:38-60`).
 

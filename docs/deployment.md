@@ -2,7 +2,7 @@
 title: CLI Agents deployment
 type: deployment
 created: 2026-09-27
-updated: 2026-09-28
+updated: 2026-10-01
 status: active
 confidence: medium
 tags: [deployment, installation, bb-plugin]
@@ -23,7 +23,7 @@ TL;DR: Build the package with the declared npm scripts, install the local plugin
 ## Prerequisites
 
 - Node.js with npm and the BB CLI available in the shell; the package declares its build and check scripts (`package.json:85-90`). See the [overview quick start](overview.md#quick-start).
-- BB 0.43.0 or later and Plugin SDK 0.4.84 or later (`package.json:5-8`).
+- BB 0.43.0 or later and Plugin SDK 0.4.84 or later; the manifest declares no upper bounds (`package.json:5-8`).
 - macOS or Linux and the supported CLI installed on the selected BB machine; discovery reports Windows unsupported and resolves the executable on the host (`adapters/discovery.ts:34-50`, `adapters/discovery.ts:240-253`).
 - A BB project checkout or a matching environment path on a connected machine (`server.ts:38-60`).
 

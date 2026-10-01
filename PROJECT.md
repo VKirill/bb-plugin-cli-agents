@@ -1,6 +1,6 @@
 ---
 title: CLI Agents project facts
-updated: 2026-09-28
+updated: 2026-10-01
 sources:
   - package.json
   - app.tsx
@@ -25,7 +25,7 @@ sources:
 ## Entry points
 
 - BB server: `server.ts`; registers plugin RPC, mentions, dispatch hook, environment contributors, and CLI commands (`package.json:15`, `server.ts:110-140`, `server.ts:157-249`, `server.ts:250-293`).
-- Composer app: `app.tsx`; picker on `new-thread` and `thread` scopes; the thread picker activates for handoff (`package.json:16`, `app.tsx:495-510`).
+- Composer app: `app.tsx`; picker on `new-thread` and `thread` scopes; the thread picker activates for handoff, resolves the source thread’s project, and stores the choice as pending for the new thread (`package.json:16`, `app.tsx:23-38`, `app.tsx:495-505`, `server.ts:89-101`).
 - Host: `host.ts`; typed `discover`, `instructions`, and `prepare` handlers (`package.json:17`, `host.ts:6-29`).
 - Shared contracts: `contract.ts`; provider, catalog, target, selection, host RPC, and plugin RPC schemas (`contract.ts:3-98`).
 
@@ -33,7 +33,7 @@ sources:
 
 - One token per message and one bound selection per thread (`server.ts:167-181`).
 - Dispatch validates provider, project, machine, and agent availability before proceeding (`server.ts:160-203`, `host.ts:12-17`).
-- Handoff state is in a thread composer and uses a separate `handoff:<threadId>` draft key (`lib/handoff-mode.ts:1-33`, `lib/draft-selection.ts:21-51`).
+- Handoff state is in a thread composer, uses a separate `handoff:<threadId>` draft key, and selects through the project/provider pending record (`lib/handoff-mode.ts:1-33`, `lib/draft-selection.ts:21-51`, `server.ts:89-101`, `server.ts:182-191`).
 - See [architecture](docs/architecture.md) and [data model](docs/data-model.md).
 
 ## Conventions
@@ -46,7 +46,7 @@ sources:
 ## Common gotchas
 
 - Handoff detection matches en/ru button labels because the public composer scope does not distinguish it (`lib/handoff-mode.ts:1-8`).
-- Composer target resolution depends on the visible provider chip and read-only BB session keys (`lib/composer-target.ts:2-8`, `lib/composer-target.ts:49-58`).
+- Composer target resolution reads the visible provider chip and read-only BB session keys; a mounted chip without a provider logo resolves as unknown (`lib/composer-target.ts:2-8`, `lib/composer-target.ts:45-58`).
 - See [gotchas](docs/gotchas.md).
 
 ## Useful commands

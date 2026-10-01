@@ -2,9 +2,9 @@
 title: Adding a native session-agent adapter
 type: component
 created: 2026-09-12
-updated: 2026-09-28
+updated: 2026-10-01
 status: active
-confidence: high
+confidence: medium
 tags: [adapters, host-rpc, cli-agents]
 sources:
   - adapters/discovery.ts
@@ -16,6 +16,7 @@ sources:
   - lib/composer-target.ts
   - tests/adapters.test.ts
   - package.json
+  - app.tsx
 ---
 
 # Adding a native session-agent adapter
@@ -63,17 +64,43 @@ This page defines the host adapter boundary used to discover runnable session id
 
 Contract definitions: `contract.ts:36-53`; host handler bindings: `host.ts:6-29`.
 
+`rpcContract` is the app-to-server contract. `plugin(bb)` registers a handler for each declared operation; the app invokes those names through the typed RPC client (`contract.ts:54-98`, `server.ts:110-140`, `app.tsx:26`). Each input and output shape is declared with Zod, including the provider enum, target fields, nullable values, and list/string bounds (`contract.ts:3-35`, `contract.ts:54-98`).
+
+### Plugin RPC contract execution
+
+An RPC call has these stages:
+
+1. The app calls an operation by name with its input object. The contract defines that operation's accepted input and output shapes (`contract.ts:54-98`, `app.tsx:26`).
+2. The registered server handler runs the matching implementation. `catalog` and `select` resolve the target before contacting the host; the other handlers read project/thread APIs or KV storage (`server.ts:110-140`).
+3. The handler returns its declared output. Any BB SDK, host RPC, or KV error not handled in the method rejects the call; dispatch errors are caught separately by the dispatch hook (`server.ts:110-140`, `server.ts:233-238`).
+
+| Operation | Conditions and steps | Success result | Failure behavior |
+| --- | --- | --- | --- |
+| `defaults` | Reads the project and default execution options. Chooses the source marked default, otherwise the first source; uses the configured provider or an empty string (`server.ts:111-121`). | `{hostId, providerId}`; empty strings represent missing source/provider defaults (`contract.ts:55-58`). | Project or execution-options SDK failures reject the RPC (`server.ts:111-121`). |
+| `catalog` | Validates a `Target`, resolves its checkout/environment, then calls host `discover` on `target.hostId` with the resolved path and provider (`contract.ts:19-24`, `server.ts:38-71`). | Provider `Catalog`, including `supported`, warnings, version, and agents (`contract.ts:12-17`, `contract.ts:59`). | Offline host, mismatched/missing environment, absent checkout, host transport failure, or discovery exception rejects the RPC. Unsupported platform/version is returned as an unsupported catalog by discovery (`server.ts:38-71`, `adapters/discovery.ts:240-282`). |
+| `select` | Validates target and `agentId` (1–200 characters), resolves the same target modes as `catalog`, rediscovers, then requires `supported` and an exact agent ID match (`contract.ts:19-24`, `contract.ts:60-63`, `server.ts:73-91`). | Creates a UUID selection with resolved `cwd` and timestamp; writes `selection:<token>` followed by `pending:<projectId>:<providerId>` and returns `{token, label}` (`server.ts:82-91`). | Unsupported catalog or missing ID throws `Agent is not available. Refresh the list.` Resolve/discovery/storage errors reject. The writes are sequential; if writing the pending key fails after the token write, the token record remains (`server.ts:73-91`). |
+| `pending` | Reads the project/provider pending key and validates any stored value with `selectionSchema` (`contract.ts:64-70`, `server.ts:97-101`, `server.ts:125`). | Full `Selection` or `null` when the key is absent (`contract.ts:69`). | Malformed stored selection or KV failure rejects the RPC (`server.ts:97-101`). |
+| `clearPending` | Deletes only the project/provider pending key (`contract.ts:71-77`, `server.ts:93-95`, `server.ts:125-127`). | Returns `true` after deletion (`contract.ts:76`, `server.ts:93-95`). | KV deletion failure rejects the RPC (`server.ts:93-95`). |
+| `thread` | Reads `thread:<threadId>` and validates a present record (`contract.ts:78-81`, `server.ts:62-65`, `server.ts:128`). | Full `Selection` or `null` if no binding exists (`contract.ts:80`). | Malformed binding or KV read failure rejects the RPC (`server.ts:62-65`). |
+| `threadProject` | Looks up the BB thread by ID (`contract.ts:82-85`, `server.ts:129-132`). | `{projectId}` for the source thread (`contract.ts:85`, `server.ts:129-132`). | Thread lookup errors reject the RPC (`server.ts:129-132`). |
+| `favorites` | Reads the provider's favorite key; a non-array value becomes an empty list, while an array is filtered to strings and capped at 200 entries (`contract.ts:86-89`, `server.ts:103-108`, `server.ts:133`). | Up to 200 agent IDs for one provider (`contract.ts:86-89`). | KV read failures reject; a result that violates the output schema also fails RPC output validation (`contract.ts:86-89`, `server.ts:103-108`). |
+| `favorite` | Validates provider, 1–200 character agent ID, and `pinned`; removes any existing copy, appends when pinning, and keeps the last 200 entries (`contract.ts:90-97`, `server.ts:134-138`). | Updated provider favorite list (`contract.ts:97`, `server.ts:135-138`). | KV read/write errors reject; invalid input fails contract validation (`contract.ts:90-97`, `server.ts:134-138`). |
+
+`catalog` and `select` share target resolution but branch on `environmentId`: an existing environment must belong to the requested project and host and have a path; with `environmentId: null`, the server uses the project source matching the host (`server.ts:38-60`). `select` is the only RPC that both checks live agent availability and creates selection state; `pending` and `clearPending` operate on the project/provider slot, while `thread` and `threadProject` operate on a thread ID (`server.ts:73-101`, `server.ts:128-132`).
+
 ### Host contract execution
 
-The BB server creates a typed host client with `hostContract`; each request is routed to the same-named host handler (`server.ts:37`, `host.ts:6-12`).
+The server creates one typed host client with `hostContract`; each `host.call` supplies an operation name, its payload, and the target `hostId`. The host entry binds those operation names to handlers, and each handler's return value matches the contract's output schema (`contract.ts:36-53`, `server.ts:37`, `host.ts:6-12`). The server calls `discover` for catalog and selection, `prepare` during dispatch, and `instructions` for a selected Codex profile (`server.ts:66-79`, `server.ts:212-228`).
+
+The request sequence is: validate the operation payload; route it to the selected machine; run the mapped host handler; validate and return the declared result. The request schemas constrain `discover` to a supported provider and string `cwd`, `instructions` to a string `agentId`, and `prepare` to `cwd`, provider, and a 1–200 character `agentId` (`contract.ts:3`, `contract.ts:36-53`).
 
 | Operation | Steps and conditions | Success | Failures |
 | --- | --- | --- | --- |
-| `discover` | Receives `cwd` and `providerId`; the handler forwards both plus the request abort signal to provider discovery (`contract.ts:37-40`, `host.ts:10-11`). | Returns a `Catalog` containing agents, version, warnings, and `supported` (`contract.ts:12-17`). | Invalid/nonexistent working directories throw; Windows and unsupported CLI versions return `supported: false`; CLI calls time out after 20 seconds or reject on process, output-buffer, and configuration errors (`adapters/discovery.ts:18-32`, `adapters/discovery.ts:240-282`). |
-| `instructions` | Receives an `agentId` string and calls `codexInstructions` (`contract.ts:41-44`, `host.ts:9`). | Returns a string of at most 4096 characters (`contract.ts:41-44`). | Invalid profile names, missing/oversized files, missing or empty `developer_instructions`, and instructions over 4096 characters throw (`adapters/codex.ts:8-31`, `adapters/codex.ts:81-92`). |
-| `prepare` | Rediscovers in the supplied `cwd`; rejects an unsupported catalog or an `agentId` absent from it. Codex validates and reads profile instructions; other supported providers resolve their CLI executable and create launch settings (`host.ts:12-27`). | Returns an array of `{name, value, reason}` environment entries; Codex returns an empty array (`contract.ts:33-35`, `host.ts:18-27`). | Missing agent, unsupported catalog, missing CLI executable, invalid Codex instructions, and launcher setup errors reject the request (`host.ts:12-27`, `adapters/discovery.ts:34-50`, `adapters/codex.ts:81-92`, `adapters/launch.ts:17-60`). |
+| `discover` | Host handler forwards `cwd`, `providerId`, and abort signal to discovery. Discovery requires an existing absolute directory and a supported OS, then branches to Claude Code, Codex, or OpenCode discovery; each adapter checks its CLI/version and reads that provider's identities (`contract.ts:37-40`, `host.ts:10-11`, `adapters/discovery.ts:240-282`). | Returns `Catalog {agents, version, warnings, supported}`. Claude Code returns `supported: false` when `--help` lacks `--agent`, otherwise true; Codex returns false below 0.134 and true at or above it, even when no profile files were found; OpenCode sets support from whether its parsed main-agent list is non-empty. Windows returns false with a warning (`contract.ts:12-17`, `adapters/discovery.ts:129-142`, `adapters/discovery.ts:212-217`, `adapters/discovery.ts:247-267`, `adapters/discovery.ts:269-281`, `adapters/codex.ts:33-79`). | Invalid/nonexistent paths throw. CLI calls time out after 20 seconds; process failures, output-buffer overflow, and configuration parsing failures throw. Unsupported platform/version outcomes are returned as catalogs rather than thrown (`adapters/discovery.ts:18-32`, `adapters/discovery.ts:240-282`). |
+| `instructions` | Receives a profile `agentId` and reads that Codex profile's `developer_instructions`; the handler does not take a provider or thread ID (`contract.ts:41-44`, `host.ts:9`, `adapters/codex.ts:81-92`). | Returns the instruction string, limited to 4096 characters by the contract and profile reader (`contract.ts:41-44`, `adapters/codex.ts:81-92`). | Invalid profile IDs, absent/oversized files, missing or empty instructions, and instructions over 4096 characters throw (`adapters/codex.ts:8-31`, `adapters/codex.ts:81-92`). |
+| `prepare` | Rediscovers in the supplied `cwd` and requires a supported catalog containing the exact `agentId`. Then it branches by provider: Codex validates the instructions and returns no environment entries; Claude Code and OpenCode resolve their executable and build launch entries (`host.ts:12-27`, `adapters/launch.ts:17-60`). | Returns `envSchema`, an array of `{name, value, reason}` entries; Codex returns `[]`, while Claude Code and OpenCode return their native launcher overrides (`contract.ts:33-35`, `host.ts:18-27`, `adapters/launch.ts:29-60`). | Unsupported catalog or missing ID throws an unavailable-agent error. Executable lookup, invalid Codex instructions, and launcher setup/configuration errors reject the call (`host.ts:12-27`, `adapters/discovery.ts:34-50`, `adapters/codex.ts:81-92`, `adapters/launch.ts:17-60`). |
 
-The contract validates method payloads at the host boundary: `discover` uses the provider enum and string `cwd`, `instructions` accepts a string `agentId`, and `prepare` requires a provider plus an `agentId` of 1–200 characters (`contract.ts:3-3`, `contract.ts:36-53`).
+The host output schemas also cap catalog agents at 2000, descriptions at 1200 characters, instruction strings at 4096 characters, and validate every environment entry's `name`, `value`, and `reason` as strings (`contract.ts:4-17`, `contract.ts:33-53`).
 
 ## BB server plugin
 
@@ -88,7 +115,7 @@ For catalog and selection requests, the plugin resolves the target machine and w
 
 The `binding` helper reads `thread:<threadId>`, validates a stored value with `selectionSchema`, and returns `null` when the key is absent (`server.ts:62-65`).
 
-`catalog` sends `discover` to the resolved host and returns its catalog (`server.ts:66-71`). `select` resolves the same target, rediscovers the catalog, and requires both `supported: true` and an exact matching agent ID; failure throws `Agent is not available. Refresh the list.` On success it creates a UUID selection with the resolved `cwd` and timestamp, writes both `selection:<token>` and `pending:<projectId>:<providerId>`, then returns the token and `Agent: <agentId>` label (`server.ts:73-91`). Host RPC or storage errors propagate to the RPC caller.
+`catalog` sends `discover` to the resolved host and returns its catalog (`server.ts:66-71`). `select` resolves the same target, rediscovers the catalog, and requires both `supported: true` and an exact matching agent ID; failure throws `Agent is not available. Refresh the list.` On success it creates a UUID selection with the resolved `cwd` and timestamp, writes both `selection:<token>` and `pending:<projectId>:<providerId>`, then returns the token and `Agent: <agentId>` label (`server.ts:73-91`). The composer uses the pending record for its next matching dispatch; the `bb cli-agents select` command also returns a marker that can carry the token in a prompt (`app.tsx:227-249`, `server.ts:250-283`). Host RPC or storage errors propagate to the RPC caller.
 
 ## Package shape
 
