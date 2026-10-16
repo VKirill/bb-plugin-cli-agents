@@ -22,6 +22,12 @@ async function setup(agentsIn: (cwd: string) => boolean = () => true) {
           connectMachineId: null,
         }),
       },
+      threads: {
+        get: async ({ threadId }: { threadId: string }) => ({
+          id: threadId,
+          projectId: "project_a",
+        }),
+      },
       projects: {
         get: async () => ({
           id: "project_a",
@@ -280,4 +286,104 @@ it("rejects with a clear reason when the agent does not exist in the chat folder
   )) as { action: string; message?: string };
   expect(result.action).toBe("reject");
   expect(result.message).toContain("/elsewhere");
+});
+
+it("binds a selection from pending project state when no mention token is in the prompt", async () => {
+  const fake = await setup();
+  await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  });
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  // Plain message text without any [cli-agents-selection:...] token or mention
+  expect(await hook(context("t_pending", "clean prompt"))).toEqual({
+    action: "proceed",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "t_pending" }),
+  ).toMatchObject({ agentId: "reviewer" });
+  // Second thread without new selection does not inherit the consumed selection
+  expect(await hook(context("t_next", "another clean prompt"))).toEqual({
+    action: "proceed",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "t_next" }),
+  ).toBeNull();
+});
+
+it("resolves the project of an existing thread for the handoff picker", async () => {
+  const fake = await setup();
+  expect(
+    await fake.harness.behavior.callRpc("threadProject", {
+      threadId: "source_thread",
+    }),
+  ).toEqual({ projectId: "project_a" });
+});
+
+it("binds a handoff pending selection to the new thread, not the source thread that already has an agent", async () => {
+  const fake = await setup();
+  const first = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  })) as { token: string };
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  expect(await hook(context("source_thread", marker(first.token)))).toEqual({
+    action: "proceed",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "source_thread" }),
+  ).toMatchObject({ agentId: "reviewer", token: first.token });
+
+  const second = (await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  })) as { token: string };
+  expect(second.token).not.toBe(first.token);
+  expect(await hook(context("new_thread", "handoff prompt"))).toEqual({
+    action: "proceed",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "new_thread" }),
+  ).toMatchObject({ agentId: "reviewer", token: second.token });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "source_thread" }),
+  ).toMatchObject({ token: first.token });
+  const retry = (await hook(
+    context("source_thread", marker(second.token)),
+  )) as { action: string; message?: string };
+  expect(retry.action).toBe("reject");
+  expect(retry.message).toContain("fixed for this chat");
+});
+
+it("clears pending selection when clearPending is invoked", async () => {
+  const fake = await setup();
+  await fake.harness.behavior.callRpc("select", {
+    ...target,
+    agentId: "reviewer",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("pending", {
+      projectId: target.projectId,
+      providerId: target.providerId,
+    }),
+  ).toMatchObject({ agentId: "reviewer" });
+
+  await fake.harness.behavior.callRpc("clearPending", {
+    projectId: target.projectId,
+    providerId: target.providerId,
+  });
+  expect(
+    await fake.harness.behavior.callRpc("pending", {
+      projectId: target.projectId,
+      providerId: target.providerId,
+    }),
+  ).toBeNull();
+
+  const hook = fake.harness.registrations.hooks["message.dispatch"]!;
+  expect(await hook(context("t_cleared", "prompt after clear"))).toEqual({
+    action: "proceed",
+  });
+  expect(
+    await fake.harness.behavior.callRpc("thread", { threadId: "t_cleared" }),
+  ).toBeNull();
 });

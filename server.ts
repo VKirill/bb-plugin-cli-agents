@@ -87,7 +87,18 @@ export default async function plugin(bb: BbPluginApi) {
       createdAt: Date.now(),
     };
     await bb.storage.kv.set(`selection:${s.token}`, s);
+    await bb.storage.kv.set(`pending:${s.projectId}:${s.providerId}`, s);
     return { token: s.token, label: `Agent: ${agentId}` };
+  }
+  async function clearPending(projectId: string, providerId: string) {
+    await bb.storage.kv.delete(`pending:${projectId}:${providerId}`);
+    return true;
+  }
+  async function pending(projectId: string, providerId: string) {
+    const v = await bb.storage.kv.get<Selection>(
+      `pending:${projectId}:${providerId}`,
+    );
+    return v ? selectionSchema.parse(v) : null;
   }
   // Starred agents float to the top of the picker; kept per CLI for every machine.
   async function favorites(providerId: string) {
@@ -111,7 +122,14 @@ export default async function plugin(bb: BbPluginApi) {
     },
     catalog,
     select: ({ agentId, ...target }) => select(target, agentId),
+    pending: ({ projectId, providerId }) => pending(projectId, providerId),
+    clearPending: ({ projectId, providerId }) =>
+      clearPending(projectId, providerId),
     thread: ({ threadId }) => binding(threadId),
+    threadProject: async ({ threadId }) => {
+      const thread = await bb.sdk.threads.get({ threadId });
+      return { projectId: thread.projectId };
+    },
     favorites: ({ providerId }) => favorites(providerId),
     favorite: async ({ providerId, agentId, pinned }) => {
       const rest = (await favorites(providerId)).filter((id) => id !== agentId);
@@ -161,6 +179,16 @@ export default async function plugin(bb: BbPluginApi) {
             "The session agent is fixed for this chat. Start a new chat to choose another agent.",
           );
         selected = selectionSchema.parse(candidate);
+      } else if (!selected) {
+        const pendingKey = `pending:${ctx.project.id}:${ctx.requestedExecution.providerId}`;
+        const candidate = await bb.storage.kv.get<Selection>(pendingKey);
+        if (candidate) {
+          const parsed = selectionSchema.parse(candidate);
+          if (!parsed.hostId || !ctx.host?.id || parsed.hostId === ctx.host.id) {
+            selected = parsed;
+            await bb.storage.kv.delete(pendingKey);
+          }
+        }
       }
       if (!selected) return { action: "proceed" };
       if (selected.providerId !== ctx.requestedExecution.providerId) {

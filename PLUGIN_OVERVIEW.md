@@ -5,7 +5,7 @@ Pick a specialist before starting a chat and let Claude Code, OpenCode, or Codex
 
 ## What you get
 
-- An Agent menu in BB's expanded New thread composer, with search and refresh.
+- An Agent menu in BB's expanded New thread composer (and in Handoff to new thread), with search and refresh.
 - Claude Code user/project agents and agents from enabled installed Claude plugins.
 - Codex file profiles: apply developer instructions (up to 4096 characters) through BB; model, permissions and other profile settings remain unchanged.
 - OpenCode primary agents and agents that support both primary and subagent use.
@@ -20,6 +20,6 @@ Agents can inspect available roles with `bb cli-agents list` and a chat's select
 
 ## Requirements
 
-BB 0.43.x, macOS or Linux, and an installed, authenticated Claude Code, Codex 0.134+ or stock OpenCode ACP provider on the execution machine. Provider subscription limits or API charges still apply. No extra account or external service is required.
+BB 0.43.0 or later, macOS or Linux, and an installed, authenticated Claude Code, Codex 0.134+ or stock OpenCode ACP provider on the execution machine. Provider subscription limits or API charges still apply. No extra account or external service is required.
 
-Other CLI providers (e.g. Cursor, Antigravity) are unaffected and run normally without agent injection. Windows, compact/mobile composers, custom absolute-path OpenCode ACP commands, and creating a new worktree in the same submission are not supported in this release. The composer integration reads BB 0.43's internal remembered-selection format; other BB versions need compatibility verification.
+Other CLI providers (e.g. Cursor, Antigravity) are unaffected and run normally without agent injection. Windows, compact/mobile composers, custom absolute-path OpenCode ACP commands, and creating a new worktree in the same submission are not supported in this release. The composer integration reads BB 0.43's internal remembered-selection format; picker and handoff behavior were verified on BB 0.43.x, with deployment also checked on BB 0.44. Later BB versions need compatibility verification.

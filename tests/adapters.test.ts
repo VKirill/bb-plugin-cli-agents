@@ -10,7 +10,8 @@ import {
   within,
 } from "../adapters/discovery";
 import { prepareLaunch } from "../adapters/launch";
-import { readTarget } from "../lib/composer-target";
+import { readTarget, composerProvider } from "../lib/composer-target";
+import { isHandoffComposer } from "../lib/handoff-mode";
 const exec = promisify(execFile);
 const dirs: string[] = [];
 async function temp() {
@@ -128,6 +129,25 @@ describe("composer routing", () => {
     );
     expect(readTarget("p", remembered, null, "acp-cursor")).toBeNull();
   });
+  it("never falls back to defaults for a composer CLI that has no logo", () => {
+    const inForm = (logo: string | null, chip: boolean) =>
+      ({
+        closest: () => ({
+          querySelector: (q: string) =>
+            q === "[data-provider-logo]"
+              ? logo && { getAttribute: () => logo }
+              : chip && {},
+        }),
+      }) as unknown as Element;
+    expect(
+      composerProvider(inForm("/api/v1/system/providers/claude-code/logo?h=1", true)),
+    ).toBe("claude-code");
+    expect(composerProvider(inForm(null, false))).toBe("");
+    const shown = composerProvider(inForm(null, true));
+    expect(
+      readTarget("p", storage({}), { providerId: "claude-code", hostId: "host_a" }, shown),
+    ).toBeNull();
+  });
   it("uses project defaults when the native composer has no explicit selection", () => {
     expect(
       readTarget("p", storage({}), {
@@ -153,7 +173,14 @@ describe("composer routing", () => {
   });
 });
 
-import { removeSelection } from "../lib/draft-selection";
+import {
+  removeSelection,
+  cleanSelection,
+  cleanSelectionText,
+  observeDraft,
+  getDraft,
+  composerDraftKey,
+} from "../lib/draft-selection";
 it("clears only agent mention spans and refuses stale draft offsets", () => {
   const draft = {
     text: "hello Agent: reviewer world",
@@ -169,4 +196,50 @@ it("clears only agent mention spans and refuses stale draft offsets", () => {
   };
   expect(removeSelection(draft.text, draft)).toBe("hello  world");
   expect(() => removeSelection("edited text", draft)).toThrow("still updating");
+});
+
+it("cleans up accidental plain text and legacy mention duplicates", () => {
+  const duplicated =
+    "такой-то.  Agent: lane-stack:dev-orchestrator Agent: lane-stack:dev-orchestrator";
+  expect(cleanSelectionText(duplicated)).toBe("такой-то.");
+  expect(cleanSelection(duplicated)).toBe("такой-то.");
+});
+
+it("detects handoff from en and ru composer labels and ignores a follow-up form", () => {
+  const form = (label: string) => {
+    const f = {
+      querySelectorAll: () => [
+        {
+          getAttribute: (n: string) => (n === "title" ? label : null),
+          textContent: "",
+        },
+      ],
+    };
+    return {
+      closest: () => f,
+    } as unknown as Element;
+  };
+  expect(isHandoffComposer(form("Exit handoff"))).toBe(true);
+  expect(isHandoffComposer(form("Create new thread (Enter)"))).toBe(true);
+  expect(isHandoffComposer(form("Выйти из передачи"))).toBe(true);
+  expect(isHandoffComposer(form("Создать новый тред (Enter)"))).toBe(true);
+  expect(isHandoffComposer(form("Send (Enter)"))).toBe(false);
+  expect(isHandoffComposer(null)).toBe(false);
+});
+
+it("keeps handoff drafts off the new-thread draft slot", () => {
+  const newView = {
+    scope: { kind: "new-thread" as const, projectId: "proj_a" },
+  };
+  const threadView = {
+    scope: { kind: "thread" as const, threadId: "thr_source" },
+  };
+  expect(composerDraftKey(newView as never)).toBe("new-thread:proj_a");
+  expect(composerDraftKey(threadView as never)).toBe("handoff:thr_source");
+  observeDraft({ text: "new chat", mentions: [] }, newView as never);
+  expect(getDraft().draftKey).toBe("new-thread:proj_a");
+  expect(getDraft().draft.text).toBe("new chat");
+  observeDraft({ text: "follow-up", mentions: [] }, threadView as never);
+  expect(getDraft().draftKey).toBe("new-thread:proj_a");
+  expect(getDraft().draft.text).toBe("new chat");
 });

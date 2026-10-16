@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.5
+
+- Make handoff button iteration typecheck with the declared DOM library.
+
+- Keep agent selection out of the message text and remove leftover duplicate Agent labels in mobile drafts.
+- Restore the picker when switching from an unsupported CLI to a supported CLI, and keep it hidden for unsupported providers.
+- Remove the BB 0.44 and Plugin SDK 0.5 upper version bounds; retain the existing minimum versions.
+
+- Show the Agent picker in “Handoff to new thread”: the panel is a thread composer, not new-thread. Detect the mode from the form (en+ru labels; no public SDK flag). Resolve projectId from the source thread. Keep follow-up chats on the ThreadAgent label only.
+- Observe the handoff draft separately from the New thread draft. Bind the chosen agent to the created thread, not the source chat.
+
 ## 0.2.4
 
 - Fix "The workspace changed" rejecting the second message of a chat started in a project section (for example from Projects & Sections) or moved to another folder. The agent is picked before the chat has a workspace, so the selection recorded the project checkout; CLI Agents now follows the chat's real folder in the same project and machine and rebinds the agent there.

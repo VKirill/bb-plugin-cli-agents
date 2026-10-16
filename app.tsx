@@ -9,6 +9,7 @@ import {
 import * as Popover from "@radix-ui/react-popover";
 import type { rpcContract, Catalog, Target } from "./contract";
 import { readTarget, composerProvider } from "./lib/composer-target";
+import { isHandoffComposer } from "./lib/handoff-mode";
 import { Icon } from "./components/ui/icon";
 import {
   subscribeDraft,
@@ -16,22 +17,60 @@ import {
   observeDraft,
   ownMentions,
   removeSelection,
+  cleanSelection,
+  composerDraftKey,
 } from "./lib/draft-selection";
 function AgentPicker() {
   const composer = useComposer();
   const view = useComposerView();
   const rpc = useRpc<typeof rpcContract>();
+  const threadId = view.scope.kind === "thread" ? view.scope.threadId : null;
+  const [handoff, setHandoff] = useState(false);
+  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(
+    null,
+  );
   const projectId =
-    view.scope.kind === "new-thread" ? view.scope.projectId : null;
+    view.scope.kind === "new-thread"
+      ? view.scope.projectId
+      : handoff
+        ? resolvedProjectId
+        : null;
+  const pickerActive = view.scope.kind === "new-thread" || handoff;
   const draftState = useSyncExternalStore(subscribeDraft, getDraft);
-  const selected =
-    draftState.projectId === projectId
-      ? (ownMentions(draftState.draft)[0]?.label.slice(7) ?? "")
-      : "";
+  const [selected, setSelected] = useState<string>(() => {
+    const draft = getDraft().draft;
+    const fromMention = ownMentions(draft)[0]?.label.slice(7) ?? "";
+    if (fromMention) return fromMention;
+    if (projectId) {
+      try {
+        for (const p of ["claude-code", "acp-opencode", "codex"]) {
+          const stored = sessionStorage.getItem(
+            `bb.cli-agents.selected:${projectId}:${p}`,
+          );
+          if (stored) return stored;
+        }
+      } catch {}
+    }
+    return "";
+  });
   const [defaults, setDefaults] = useState<{
     hostId: string;
     providerId: string;
   } | null>(null);
+  useEffect(() => {
+    let active = true;
+    setResolvedProjectId(null);
+    if (threadId && handoff)
+      rpc
+        .call("threadProject", { threadId })
+        .then((d) => {
+          if (active) setResolvedProjectId(d.projectId);
+        })
+        .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [threadId, handoff, rpc]);
   useEffect(() => {
     let active = true;
     setDefaults(null);
@@ -57,15 +96,26 @@ function AgentPicker() {
   const request = useRef(0);
   const prevTargetRef = useRef<Target | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Stays mounted while the picker is hidden, so the composer's CLI is still readable.
+  const anchorRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const check = () => {
+      const root = triggerRef.current ?? anchorRef.current;
+      const nextHandoff =
+        view.scope.kind === "thread" ? isHandoffComposer(root) : false;
+      setHandoff(nextHandoff);
+      const active =
+        view.scope.kind === "new-thread" ||
+        (view.scope.kind === "thread" && nextHandoff);
       try {
-        const next = readTarget(
-          projectId,
-          sessionStorage,
-          defaults,
-          composerProvider(triggerRef.current),
-        );
+        const next = active
+          ? readTarget(
+              projectId,
+              sessionStorage,
+              defaults,
+              composerProvider(root),
+            )
+          : null;
         setTarget((old) =>
           JSON.stringify(old) === JSON.stringify(next) ? old : next,
         );
@@ -80,7 +130,7 @@ function AgentPicker() {
     return () => {
       clearInterval(timer);
     };
-  }, [projectId, defaults]);
+  }, [projectId, defaults, view.scope.kind]);
   useEffect(() => {
     request.current++;
     setCatalog(null);
@@ -91,12 +141,53 @@ function AgentPicker() {
   }, [target]);
 
   useEffect(() => {
-    if (!initialized || draftState.projectId !== projectId) return;
-    const mentions = ownMentions(draftState.draft);
-    if (!mentions.length) {
-      prevTargetRef.current = target;
+    if (!target) {
+      setSelected("");
       return;
     }
+    let active = true;
+    try {
+      const stored = sessionStorage.getItem(
+        `bb.cli-agents.selected:${target.projectId}:${target.providerId}`,
+      );
+      if (stored !== null) setSelected(stored);
+    } catch {}
+    rpc
+      .call("pending", {
+        projectId: target.projectId,
+        providerId: target.providerId,
+      })
+      .then((s) => {
+        if (active) {
+          const agentId = s?.agentId ?? "";
+          setSelected(agentId);
+          try {
+            if (agentId) {
+              sessionStorage.setItem(
+                `bb.cli-agents.selected:${target.projectId}:${target.providerId}`,
+                agentId,
+              );
+            } else {
+              sessionStorage.removeItem(
+                `bb.cli-agents.selected:${target.projectId}:${target.providerId}`,
+              );
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [target?.projectId, target?.providerId, rpc]);
+
+  useEffect(() => {
+    if (
+      !initialized ||
+      !pickerActive ||
+      draftState.draftKey !== composerDraftKey(view)
+    )
+      return;
     const prev = prevTargetRef.current;
     if (
       !target ||
@@ -106,7 +197,10 @@ function AgentPicker() {
           prev.projectId !== target.projectId))
     ) {
       try {
-        composer.updateText((text) => removeSelection(text, draftState.draft));
+        const draft = draftState.draft;
+        if (ownMentions(draft).length > 0 || /Agent:\s+[^\s]+/u.test(draft.text)) {
+          composer.updateText((text) => cleanSelection(text, draft));
+        }
       } catch {}
     }
     prevTargetRef.current = target;
@@ -136,21 +230,21 @@ function AgentPicker() {
     setBusy(true);
     setError("");
     try {
-      const result = await rpc.call("select", { ...target, agentId });
+      await rpc.call("select", { ...target, agentId });
       if (generation !== request.current) return;
-      if (selected) {
-        const draft = getDraft().draft;
-        composer.updateText((text) => removeSelection(text, draft));
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
+      setSelected(agentId);
+      try {
+        sessionStorage.setItem(
+          `bb.cli-agents.selected:${target.projectId}:${target.providerId}`,
+          agentId,
         );
-        if (generation !== request.current) return;
-      }
-      composer.insertMention({
-        provider: "selection",
-        id: result.token,
-        label: result.label,
-      });
+      } catch {}
+      try {
+        const draft = getDraft().draft;
+        if (ownMentions(draft).length > 0 || /Agent:\s+[^\s]+/u.test(draft.text)) {
+          composer.updateText((text) => cleanSelection(text, draft));
+        }
+      } catch {}
       prevTargetRef.current = target;
       setOpen(false);
     } catch (e) {
@@ -158,6 +252,28 @@ function AgentPicker() {
     } finally {
       if (generation === request.current) setBusy(false);
     }
+  };
+  const clearSelection = async () => {
+    if (!target) return;
+    setSelected("");
+    try {
+      sessionStorage.removeItem(
+        `bb.cli-agents.selected:${target.projectId}:${target.providerId}`,
+      );
+    } catch {}
+    try {
+      await rpc.call("clearPending", {
+        projectId: target.projectId,
+        providerId: target.providerId,
+      });
+    } catch {}
+    try {
+      const draft = getDraft().draft;
+      if (ownMentions(draft).length > 0 || /Agent:\s+[^\s]+/u.test(draft.text)) {
+        composer.updateText((text) => cleanSelection(text, draft));
+      }
+    } catch {}
+    setOpen(false);
   };
   const star = async (agentId: string) => {
     if (!target) return;
@@ -177,7 +293,7 @@ function AgentPicker() {
       setError((e as Error).message);
     }
   };
-  if (!target) return null;
+  if (!pickerActive || !target) return <span ref={anchorRef} hidden />;
   return (
     <Popover.Root
       open={open}
@@ -192,20 +308,20 @@ function AgentPicker() {
           type="button"
           aria-label="Choose CLI session agent"
           title="Choose a native session agent"
-          className="inline-flex h-8 max-w-64 items-center gap-1 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="inline-flex h-7 max-w-28 sm:max-w-48 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
           disabled={view.run.isSubmitting}
         >
           <span className="truncate">
             {selected || (target?.providerId === "codex" ? "Profile" : "Agent")}
           </span>
-          <Icon name="ChevronDown" className="size-4 shrink-0" />
+          <Icon name="ChevronDown" className="size-3.5 shrink-0" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="start"
           sideOffset={8}
-          className="z-50 w-80 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg"
+          className="z-50 w-80 max-w-[calc(100vw-24px)] rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between px-1">
             <span className="text-sm font-medium">
@@ -323,15 +439,7 @@ function AgentPicker() {
               <button
                 type="button"
                 className="hover:text-foreground"
-                onClick={() => {
-                  try {
-                    const draft = getDraft().draft;
-                    composer.updateText((text) => removeSelection(text, draft));
-                    setOpen(false);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
+                onClick={() => void clearSelection()}
               >
                 Use default agent
               </button>
@@ -348,7 +456,18 @@ function ThreadAgent() {
   const view = useComposerView();
   const rpc = useRpc<typeof rpcContract>();
   const [agent, setAgent] = useState("");
+  const [handoff, setHandoff] = useState(false);
   const threadId = view.scope.kind === "thread" ? view.scope.threadId : null;
+  const labelRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const check = () =>
+      setHandoff(threadId ? isHandoffComposer(labelRef.current) : false);
+    check();
+    const timer = setInterval(check, 500);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [threadId]);
   useEffect(() => {
     let active = true;
     if (threadId)
@@ -362,14 +481,16 @@ function ThreadAgent() {
       active = false;
     };
   }, [threadId, rpc]);
-  return agent ? (
+  if (handoff || !agent) return <span ref={labelRef} hidden />;
+  return (
     <span
-      className="px-2 text-xs text-muted-foreground"
+      ref={labelRef}
+      className="max-w-28 truncate px-2 text-xs text-muted-foreground"
       title="Native session agent"
     >
       {agent}
     </span>
-  ) : null;
+  );
 }
 export default definePluginApp((app) => {
   app.contentScripts.register({
@@ -378,7 +499,7 @@ export default definePluginApp((app) => {
   });
   app.composer.customize({
     id: "agent-picker",
-    scopes: ["new-thread"],
+    scopes: ["new-thread", "thread"],
     richText: { onDraftChange: observeDraft },
     actions: [{ id: "agent", component: AgentPicker }],
   });

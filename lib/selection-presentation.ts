@@ -7,7 +7,7 @@ export function mountSelectionPresentation(pluginId: string) {
   style.dataset.cliAgentsPresentation = "selection";
   const owner = JSON.stringify(`"pluginId":"${pluginId}"`);
   const item = JSON.stringify('"itemId":"selection:');
-  style.textContent = `[data-prompt-mention-resource*=${owner}][data-prompt-mention-resource*=${item}] { display: none !important; }`;
+  style.textContent = `[data-prompt-mention-resource*=${owner}][data-prompt-mention-resource*=${item}], [data-prompt-mention-resource*="selection:"] { display: none !important; }`;
   document.head.append(style);
   return () => style.remove();
 }

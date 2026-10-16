@@ -42,11 +42,18 @@ export function readTarget(
     environmentId: env.startsWith("reuse:") ? env.slice(6) : null,
   };
 }
-/** Provider id of the composer this element sits in, or "" when not rendered yet. */
+/** Provider id of the composer this element sits in, or "" when not rendered yet.
+ * bb draws a generic icon for a CLI without a logo (Antigravity); every supported
+ * CLI has one, so a mounted chip without a logo is reported as "unknown".
+ */
 export function composerProvider(element: Element | null): string {
-  const logo = element
-    ?.closest("form")
+  const form = element?.closest("form");
+  const logo = form
     ?.querySelector("[data-provider-logo]")
     ?.getAttribute("data-provider-logo");
-  return /\/providers\/([^/?]+)\/logo/.exec(logo ?? "")?.[1] ?? "";
+  const id = /\/providers\/([^/?]+)\/logo/.exec(logo ?? "")?.[1] ?? "";
+  if (id) return id;
+  return form?.querySelector('button[aria-keyshortcuts="Shift+Meta+M"]')
+    ? "unknown"
+    : "";
 }

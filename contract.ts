@@ -61,9 +61,27 @@ export const rpcContract = defineRpcContract({
     input: targetSchema.extend({ agentId: z.string().min(1).max(200) }),
     output: z.object({ token: z.string(), label: z.string() }),
   },
+  pending: {
+    input: z.object({
+      projectId: z.string(),
+      providerId: providerSchema,
+    }),
+    output: selectionSchema.nullable(),
+  },
+  clearPending: {
+    input: z.object({
+      projectId: z.string(),
+      providerId: providerSchema,
+    }),
+    output: z.boolean(),
+  },
   thread: {
     input: z.object({ threadId: z.string() }),
     output: selectionSchema.nullable(),
+  },
+  threadProject: {
+    input: z.object({ threadId: z.string() }),
+    output: z.object({ projectId: z.string() }),
   },
   favorites: {
     input: z.object({ providerId: providerSchema }),
